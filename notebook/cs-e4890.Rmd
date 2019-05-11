@@ -1,0 +1,620 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# CS-E4890 – Jigsaw Unintended Bias in Toxicity Classification
+
+## Abstract
+
+
+## Introduction
+
+The goal of this project is to attempt to solve a toxicity classification problem in the field of natural language processing (NLP). The approach used in this paper discusses neural networks and how they perform for this classification task. We discuss our reasoning, expectations and thoughts of the execution of our project. The toxicity classification problem at hand is due to the increasing amount of discussion platforms such as, comment feeds on live broadcasts and other forums. Some live broadcasts are targeted for wide audiences and need efficient, near instantanious, profanity filtering.
+
+Typically, the issue with naïve profanity filtering is focusing too heavily on individual words and ignoring the context. It was studied that names of the frequently attacked identities were automatically accociated to toxicity by machine learning (ML) models, even if the individual(s) themselves, or the context, were not offensive. (Kaggle. 2019) 
+
+In this paper, the overall assessment of the goodness of our model is deviced with an overall Area under the curve (AUC) Receiver operating characteristic curve (ROC) test and with multiple other submetrics. The submetrics are:
+- Bias AUCs: To prevent unintended bias we use three specific subsets of the test for each identity, attemping to capture all the aspects of unintended bias.
+     - Subgroup AUC: Focuses on specific identity subgroup
+     - Background Positive, Subgroup negative (BSPSN) AUC: Evaluates only non-toxic examples for an identity and toxic examples without the identity
+     - Background Negative, Subgroup positive (BNSP) AUC: The test set is restricted opposite to BSPN, only featuring examples of toxic examples of an identity and non-toxic examples without the identity
+- Generalized Mean of Bias AUCs
+    - Calculates the combination of the per-identity Bias AUCs into one overall measure with:
+$$M_p(m_s) = \left(\frac{1}{N} \sum_{s=1}^{N} m_s^p\right)^\frac{1}{p}$$
+where:
+- $M_p$ = the pth power-mean function
+- $m_s$ = the bias metric m calulated for subgroup s
+- $N$ = number of identity subgroups
+
+
+Lastly, after obtaining the overall AUC and the General Mean of Bias AUCs the calculation of the final model is done with formula:
+$$score = w_0 AUC_{overall} + \sum_{a=1}^{A} w_a M_p(m_{s,a})$$
+where:
+- $A$ = number of submetrics (3)
+- $m_s,a$ = bias metric for identity subgroup $s$ using submetric $a$
+- $w_a$ = a weighting for the relative importance of each submetric; all four $w$ values set to 0.25
+
+
+## Imports and Utilities
+
+```{python}
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O
+import re # regexes
+import matplotlib.pyplot as plt # plotting
+import os
+
+import time # timestamps
+import gc
+import random
+from tqdm._tqdm_notebook import tqdm_notebook as tqdm
+from keras.preprocessing import text, sequence
+import torch
+from torch import nn
+from torch.utils import data
+from torch.nn import functional as F
+
+import os
+```
+
+## Analysing the datasets
+The origin of the data is from year 2017 when the Civil Comments platform shut down and published their ~2m public comments making them available for researchers. Each item in the dataset  has one primary attribute for the toxicity, `target`, indicating a goal value that the models should try to achieve. The trained model should then predict the `target` toxicity for the test data.
+
+In addition to `target`, there are several subtypes of toxicity. These are not supposed to be predicted by the model, but they are for providing additional avenue for future research. The subtype attributes are:
+- severe_toxicity
+- obscene
+- threat
+- insult
+- identity_attack
+- sexual_explicit
+
+Along with these, we may use attribute `parent_id` for training our model. The reason for this is that we think that the neural network should mark some difference between comments that start a thread versus ones that do not.
+
+Some of the comments have a label for identity. There are multiple identity attributes, each representing the identity that is mentioned in the comment. The identities we are interested, as the ones used in the validation of the model, are:
+- male
+- female
+- homosexuality_gay_or_lesbian
+- christian
+- jewish
+- muslim
+- black
+- white
+- psychiatric_or_mental_illness
+
+Based on these, we decided to select the following columns for training the model and drop all other columns:
+
+```{python}
+identity_columns = [
+    "male",
+    "female",
+    "homosexual_gay_or_lesbian",
+    "christian",
+    "jewish",
+    "muslim",
+    "black",
+    "white",
+    "psychiatric_or_mental_illness"
+]
+
+relevant_columns = [
+    "id",
+    "target",
+    "comment_text"
+] + identity_columns
+```
+
+### Cleaning up the data
+
+The dataset contains duplicate comments with same content. However, the different comments may have been labelled with different targets or subgroups [kaggle].
+
+The operations we do for the datasets are; lowercase the words, remove the non-alpha characters, fill empty values with 0 and preprocess the data so that we obtain a much smaller, more compact, sets for the training and validation.
+
+```{python}
+x_train = None
+x_test = None
+```
+
+```{python}
+def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
+    """Create a cleaned file from a file"""
+    data = pd.read_csv(
+        f"../input/{from_name}.csv",
+        usecols=cols, # use only relevant columns, as specified before in the notebook
+    )
+    data.set_index("id", inplace=True)
+
+    words = set()
+    data["comment_text"].str.split().apply(words.update)
+
+    # Remove all non-alphanumeric or space characters from comment text
+    data["comment_text"] = data["comment_text"].transform(lambda s: re.sub("[^a-z\d\s]", " ", s.lower()))
+    data = data.fillna(0) # fill empty values with 0
+
+    if drop_duplicates:
+        cleaned_words = set()
+        data["comment_text"].str.split().apply(cleaned_words.update)
+
+        # Write summary file for visualising the cleanup process
+        pd.DataFrame({
+            "previous_word_count": [len(words)],
+            "cleaned_word_count": [len(cleaned_words)],
+            "previous_row_count": [len(data)],
+            "cleaned_row_count": [data['comment_text'].nunique()]
+        }).to_csv("./"+to_name+"_summary.csv")
+
+        data = data.groupby('comment_text').mean().reset_index()
+    data.to_csv("./"+to_name+".csv")
+
+def print_cleanup_summary(filename):
+    # read cleanup summary from saved file
+    cleanup_summary = pd.read_csv("./"+filename+"_summary.csv")
+    initial_row_count, initial_word_count = cleanup_summary.loc[
+        0,
+        ["previous_row_count", "previous_word_count"]
+    ]
+    cleaned_row_count, cleaned_word_count = cleanup_summary.loc[
+        cleanup_summary.index[-1],
+        ["cleaned_row_count", "cleaned_word_count"]
+    ]
+
+    print("The original data was reducted by {} rows ({:.2f}%) and by {} words ({:.2f}%)".format( 
+        initial_row_count - cleaned_row_count,
+        100 * (1 - cleaned_row_count / initial_row_count),
+        initial_word_count - cleaned_word_count,
+        100 * (1 - cleaned_word_count / initial_word_count)
+    ))
+    
+def read_cleaned_file(data, from_name, to_name, cols, drop_duplicates=True):
+    if not os.path.isfile("./"+to_name+".csv"):
+        create_cleaned_file(from_name, to_name, cols, drop_duplicates)
+    # read data from cleaned data file if not already set
+    if data is None:
+        data = pd.read_csv("./"+to_name+".csv")
+    return data
+```
+
+#### Pre-processing
+
+```{python}
+x_train = read_cleaned_file(x_train, 'train', 'train_cleaned', relevant_columns)
+y_train = np.where(x_train['target'] >= .5, 1, 0)
+
+print(x_train.shape)
+print(y_train.shape)
+
+x_test = read_cleaned_file(x_test, 'test', 'test_cleaned', ["id", "comment_text"], False)
+```
+
+```{python}
+print_cleanup_summary("train_cleaned")
+```
+
+```{python}
+x_train.sort_values(by=["jewish", "target"], ascending=False).head(10)
+```
+
+> ## Methods
+
+Natural language processing (NLP) is an example of a Supervised Machine Learning task that focuses in labelled datasets containing sequences and or single words. The purpose of NLP is to train a classifier that can distinguish the sets of words into their right belonging categories (classes).
+
+Typically the text classification pipeline contains the following components:
+- Training data: Input text for the model
+- Feature vector: A vector that describe the input texts, in some charasteristic or multiple ones
+- Labels: The classes that we plan to predict with our trained model
+- Algorithm: A machine learning algorithm that is used to classify the inputs
+- Model: The result of the training, this will perform the label predictions ( https://medium.com/jatana/report-on-text-classification-using-cnn-rnn-han-f0e887214d5f )
+
+A prime example of a text classification problem is detection of spam or toxic sentences.
+
+Use of recursive neural networks (RNN) in natural language processing (NLP) is an intuitive and an advisable method. (**SOURCE**) RNNs exceed in grammar learning as the order of words may have an effect on the context of the sentence. This is mainly because their ability to process sequences of inputs, such as, in the case of toxicity filtering, sequences of words.
+
+### Convolutional Neural Network (CNN)
+
+CNNs are feed-forward artificial neural networks. They use a variation of multilayer perceptrons that offer minimal preprocessing. Use of CNNs in NLP is a relatively new technique as previously their primary use case was in computer vision. 
+
+
+
+### Recursive neural network (RNN)
+
+In RNN the nodes of the network form a directed graph along with a temporal sequence. Each individual input of the sequence is
+
+
+### LSTM
+
+This section is for LSTM
+
+```{python}
+def seed_everything(seed=1234):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+seed_everything()
+```
+
+```{python}
+# Configurations
+CRAWL_EMBEDDING_PATH = '../input/fasttext-crawl-300d-2m/crawl-300d-2M.vec'
+GLOVE_EMBEDDING_PATH = '../input/glove840b300dtxt/glove.840B.300d.txt'
+NUM_MODELS = 2
+LSTM_UNITS = 128
+DENSE_HIDDEN_UNITS = 4 * LSTM_UNITS
+MAX_LEN = 220
+```
+
+```{python}
+def get_coefs(word, *arr):
+    return word, np.asarray(arr, dtype='float32')
+
+def load_embeddings(path):
+    with open(path) as f:
+        return dict(get_coefs(*line.strip().split(' ')) for line in tqdm(f))
+
+def build_matrix(word_index, path):
+    embedding_index = load_embeddings(path)
+    embedding_matrix = np.zeros((len(word_index) + 1, 300))
+    unknown_words = []
+    
+    for word, i in word_index.items():
+        try:
+            embedding_matrix[i] = embedding_index[word]
+        except KeyError:
+            unknown_words.append(word)
+    return embedding_matrix, unknown_words
+```
+
+```{python}
+# Sigmoid
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+# Train
+def train_model(model, train, test, loss_fn, output_dim, lr=0.001,
+                batch_size=512, n_epochs=4,
+                enable_checkpoint_ensemble=True):
+    param_lrs = [{'params': param, 'lr': lr} for param in model.parameters()]
+    optimizer = torch.optim.Adam(param_lrs, lr=lr)
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.6 ** epoch)
+    
+    train_loader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False)
+    all_test_preds = []
+    checkpoint_weights = [2 ** epoch for epoch in range(n_epochs)]
+    
+    for epoch in range(n_epochs):
+        start_time = time.time()
+        
+        scheduler.step()
+        
+        model.train()
+        avg_loss = 0.
+        
+        for data in tqdm(train_loader, disable=False):
+            x_batch = data[:-1]
+            y_batch = data[-1]
+
+            y_pred = model(*x_batch)            
+            loss = loss_fn(y_pred, y_batch)
+
+            optimizer.zero_grad()
+            loss.backward()
+
+            optimizer.step()
+            avg_loss += loss.item() / len(train_loader)
+            
+        model.eval()
+        test_preds = np.zeros((len(test), output_dim))
+    
+        for i, x_batch in enumerate(test_loader):
+            y_pred = sigmoid(model(*x_batch).detach().cpu().numpy())
+
+            test_preds[i * batch_size:(i+1) * batch_size, :] = y_pred
+
+        all_test_preds.append(test_preds)
+        elapsed_time = time.time() - start_time
+        print('Epoch {}/{} \t loss={:.4f} \t time={:.2f}s'.format(
+              epoch + 1, n_epochs, avg_loss, elapsed_time))
+
+    if enable_checkpoint_ensemble:
+        test_preds = np.average(all_test_preds, weights=checkpoint_weights, axis=0)    
+    else:
+        test_preds = all_test_preds[-1]
+        
+    return test_preds
+```
+
+```{python}
+# Network
+
+class SpatialDropout(nn.Dropout2d):
+    def forward(self, x):
+        x = x.unsqueeze(2)    # (N, T, 1, K)
+        x = x.permute(0, 3, 2, 1)  # (N, K, 1, T)
+        x = super(SpatialDropout, self).forward(x)  # (N, K, 1, T), some features are masked
+        x = x.permute(0, 3, 2, 1)  # (N, T, 1, K)
+        x = x.squeeze(2)  # (N, T, K)
+        return x
+    
+class NeuralNet(nn.Module):
+    def __init__(self, embedding_matrix, num_aux_targets):
+        super(NeuralNet, self).__init__()
+        embed_size = embedding_matrix.shape[1]
+        
+        self.embedding = nn.Embedding(max_features, embed_size)
+        self.embedding.weight = nn.Parameter(torch.tensor(embedding_matrix, dtype=torch.float32))
+        self.embedding.weight.requires_grad = False
+        self.embedding_dropout = SpatialDropout(0.3)
+        
+        self.lstm1 = nn.LSTM(embed_size, LSTM_UNITS, bidirectional=True, batch_first=True)
+        self.lstm2 = nn.LSTM(LSTM_UNITS * 2, LSTM_UNITS, bidirectional=True, batch_first=True)
+    
+        self.linear1 = nn.Linear(DENSE_HIDDEN_UNITS, DENSE_HIDDEN_UNITS)
+        self.linear2 = nn.Linear(DENSE_HIDDEN_UNITS, DENSE_HIDDEN_UNITS)
+        
+        self.linear_out = nn.Linear(DENSE_HIDDEN_UNITS, 1)
+        self.linear_aux_out = nn.Linear(DENSE_HIDDEN_UNITS, num_aux_targets)
+        
+    def forward(self, x):
+        h_embedding = self.embedding(x)
+        h_embedding = self.embedding_dropout(h_embedding)
+        
+        h_lstm1, _ = self.lstm1(h_embedding)
+        h_lstm2, _ = self.lstm2(h_lstm1)
+        
+        # global average pooling
+        avg_pool = torch.mean(h_lstm2, 1)
+        # global max pooling
+        max_pool, _ = torch.max(h_lstm2, 1)
+        
+        h_conc = torch.cat((max_pool, avg_pool), 1)
+        h_conc_linear1  = F.relu(self.linear1(h_conc))
+        h_conc_linear2  = F.relu(self.linear2(h_conc))
+        
+        hidden = h_conc + h_conc_linear1 + h_conc_linear2
+        
+        result = self.linear_out(hidden)
+        aux_result = self.linear_aux_out(hidden)
+        out = torch.cat([result, aux_result], 1)
+        
+        return out
+```
+
+foo
+
+```{python}
+
+```
+
+```{python}
+max_features = None
+```
+
+```{python}
+tokenizer = text.Tokenizer()
+tokenizer.fit_on_texts(list(x_train) + list(x_test))
+
+x_train = tokenizer.texts_to_sequences(x_train)
+x_test = tokenizer.texts_to_sequences(x_test)
+x_train = sequence.pad_sequences(x_train, maxlen=MAX_LEN)
+x_test = sequence.pad_sequences(x_test, maxlen=MAX_LEN)
+```
+
+```{python}
+max_features = max_features or len(tokenizer.word_index) + 1
+max_features
+```
+
+```{python}
+crawl_matrix, unknown_words_crawl = build_matrix(tokenizer.word_index, CRAWL_EMBEDDING_PATH)
+print('n unknown words (crawl): ', len(unknown_words_crawl))
+```
+
+```{python}
+glove_matrix, unknown_words_glove = build_matrix(tokenizer.word_index, GLOVE_EMBEDDING_PATH)
+print('n unknown words (glove): ', len(unknown_words_glove))
+```
+
+```{python}
+embedding_matrix = np.concatenate([crawl_matrix, glove_matrix], axis=-1)
+embedding_matrix.shape
+
+del crawl_matrix
+del glove_matrix
+gc.collect()
+```
+
+```{python}
+print(x_train.shape)
+print(y_train.shape)
+
+x_train_torch = torch.tensor(x_train, dtype=torch.long)
+y_train_torch = torch.tensor(y_train, dtype=torch.float32)
+
+print(x_train_torch.size())
+print(y_train_torch.size())
+
+x_test_torch = torch.tensor(x_test, dtype=torch.long)
+```
+
+```{python}
+train_dataset = data.TensorDataset(x_train_torch, y_train_torch)
+test_dataset = data.TensorDataset(x_test_torch)
+
+all_test_preds = []
+
+for model_idx in range(NUM_MODELS):
+    print('Model ', model_idx)
+    seed_everything(1234 + model_idx)
+    
+    model = NeuralNet(embedding_matrix, 10)
+    
+    test_preds = train_model(model, train_dataset, test_dataset, output_dim=10, 
+                             loss_fn=nn.BCEWithLogitsLoss(reduction='mean'))
+    all_test_preds.append(test_preds)
+    print()
+```
+
+### Bi-directional LSTM
+
+foo bar
+
+
+## Results
+
+
+## Conclusions
+
+
+## References
+
+Yenala, H., Jhanwar, A., Chinnakotla, M.K. et al. Int J Data Sci Anal (2018) 6: 273. https://doi.org/10.1007/s41060-017-0088-4
+
+
+## Appendix
+
+
+## Pitch
+
+### 3) Write below a short description of the machine learning problem you plan to address
+
+Detecting toxic comments while minimizing uninted model bias. Jigsaw Unintended Bias in Toxicity Classification.
+<https://www.kaggle.com/c/jigsaw-unintended-bias-in-toxicity-classification/overview>.
+
+### 4) Write below what deep learning approach(es) you plan to employ in your project
+
+At first we will inspect the data and manipulate it by different methods (e.g. converting that's -> that is). After analyzing the data, we'll feed it to neural network.
+We plan on using Convolution Neural Networks (CNN) because they have been shown effective for various natural language processing (NLP) problems.
+
+In addition to CNNs, we will implement a Long short-term memory (LSTM) recurrent neural network (RNN) or a GRU network (a variation of LSTM),
+and compare those results to the results obtained by CNNs.
+
+###  5) Write below what deep learning software you plan to use in your project
+
+We will use PyTorch.
+
+### 6) Write below what computational resources you plan to utilize in your project
+
+We use Kaggle's computational cloud environment, Kaggle Kernels.
+
+At time of writing, each Kernel editing session is provided with the following resources:
+- 9 hours execution time
+- 5 Gigabytes of auto-saved disk space (/kaggle/working)
+- 16 Gigabytes of temporary, scratchpad disk space (outside /kaggle/working)
+
+CPU Specifications
+- 4 CPU cores
+- 17 Gigabytes of RAM
+
+GPU Specifications
+- 2 CPU cores
+- 14 Gigabytes of RAM
+
+### 7) Write below what kind of data you plan to use in your experiments
+
+Data provided in the Kaggle competition (format of files is .csv).
+
+### 8) Write below what are the reference methods and results you plan to compare against
+
+Overall AUC:
+- This is the ROC-AUC (Receiver operating characteristic curve - Area Under the ROC Curve) for the full evaluation set.
+
+Bis AUCs:
+- To measure unintended bias, we again calculate the ROC-AUC, this time on three specific subsets of the test set for each identity, each capturing a different aspect of unintended bias.
+  - Subgroup AUC
+  - BPSN
+  - BNSP
+
+Generalized Mean of Bias AUCs:
+- To combine the per-identity Bias AUCs into one overall measure, we calculate their generalized mean.
+
+Final Metric:
+- We combine the overall AUC with the generalized mean of the Bias AUCs to calculate the final model score.
+
+
+## Criteria
+
+### Section 1. Problem and data description (3 pts)
+
+#### 1.1. The report should describe the problem and/or research questions addressed in the project. (1 pt)
+
+* It is unclear what problem the project tries to solve.
+* The problem is described but some details are missing.
+* The problem is described well.
+
+#### 1.2. Bonus: Is the problem novel and/or original? (1 pt)
+
+* No
+* Yes
+
+#### 1.3 Data description. (1 pt)
+
+Describe data dimensionalities, number of training samples, the format used.
+
+* The data is not described.
+* The data is described but some details are missing.
+* The data is described well.
+
+#### 1.4. Please describe what details were missing in the problem/data description.
+
+### Section 2. Method (6 pts)
+
+#### 2.1. Method description. (2 pts)
+
+The report should describe well the model used in the project. If the model was covered in the lectures, it is ok to describe the architecture (such as, e.g., the number of layers etc) without going into details (such as computations in a basic convolutional layer). If the model was not covered in the lectures, you need to provide enough details so that your classmates can understand it without checking external references.
+
+* The model is not described.
+* The model is described well but some details are missing.
+* The model is described very well. I could implement the model based on the description.
+
+#### 2.2. Choice of the model. (2 pts)
+
+* The proposed model is not reasonable for the task.
+* The model is reasonable but some choices are questionable.
+* The model is suitable for the task.
+
+#### 2.3. Bonus: Is the model novel and/or original? (2 pts)
+
+* No
+* Partly
+* Yes, the model deserves to be presented in a conference
+
+#### 2.4. If you think that the model is not perfectly suitable for the task, please write your suggestions on how the model could be improved.
+
+### Section 3. Experiments and results (4 pts)
+
+#### 3.1. Are the experiments described well in the report? (2 pts)
+
+* The experiments are not described.
+* Experiments are described but some details are missing.
+* Experiments are well described. I could reproduce the experiments based on the description.
+
+#### 3.2. Performance of the proposed model (2 pts)
+
+* It is difficult to evaluate the performance (there is no baseline or no demo for tasks that require subjective evaluation).
+* The results are adequate.
+* The results are impressive (either close to the state of the art or good subjective evaluation).
+
+### Section 4. Conclusions (1 pt)
+
+#### 4.1. Conclusions are adequate:
+* No
+* Yes
+
+#### 4.2. Optional feedback on the conclusions.
+
+### Section 5. Evaluate the code. (3 pts)
+
+### Section 6. Overall feedback (3 pts)
+
