@@ -1,0 +1,7 @@
+keras-preprocessing
+matplotlib
+numpy
+numpy-base
+numpydoc
+pandas
+torchvision
