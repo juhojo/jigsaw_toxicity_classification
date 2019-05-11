@@ -54,13 +54,18 @@ import re # regexes
 import matplotlib.pyplot as plt # plotting
 import os
 
+from keras import preprocessing
 import torch
 from torch import nn
-from torch.utils import data
 from torch.nn import functional as F
 import torch.optim as optim
 
 import os
+
+from util import get_individual_words
+
+#device = torch.device('cuda:0')
+device = torch.device('cpu')
 ```
 
 ## Analysing the datasets
@@ -116,11 +121,6 @@ The dataset contains duplicate comments with same content. However, the differen
 The operations we do for the datasets are; lowercase the words, remove the non-alpha characters, fill empty values with 0 and preprocess the data so that we obtain a much smaller, more compact, sets for the training and validation.
 
 ```{python}
-x_train = None
-x_test = None
-```
-
-```{python}
 def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
     """Create a cleaned file from a file"""
     data = pd.read_csv(
@@ -129,8 +129,7 @@ def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
     )
     data.set_index("id", inplace=True)
 
-    words = set()
-    data["comment_text"].str.split().apply(words.update)
+    _, original_word_count = get_individual_words(data["comment_text"])
 
     # Remove all non-alphanumeric or space characters from comment text
     data["comment_text"] = data["comment_text"].transform(lambda s: re.sub("[^a-z\d\s]", " ", s.lower()))
@@ -142,8 +141,8 @@ def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
 
         # Write summary file for visualising the cleanup process
         pd.DataFrame({
-            "previous_word_count": [len(words)],
-            "cleaned_word_count": [len(cleaned_words)],
+            "previous_word_count": [original_word_count],
+            "cleaned_word_count": [get_individual_words(data["comment_text"])[1]],
             "previous_row_count": [len(data)],
             "cleaned_row_count": [data['comment_text'].nunique()]
         }).to_csv("./"+to_name+"_summary.csv")
@@ -185,7 +184,7 @@ print_cleanup_summary("train_cleaned")
 ```
 
 ```{python}
-data.sort_values(by=["jewish", "target"], ascending=False).head(10)
+data.sort_values(by=["target", "jewish"], ascending=False).head(10)
 ```
 
 > ## Methods
@@ -205,14 +204,27 @@ Use of recursive neural networks (RNN) in natural language processing (NLP) is a
 
 
 ```{python}
-x_train = data["comment_text"]
-y_train = x_train[["target"] + identity_columns]
+train_x = data["comment_text"]
+train_y = data[["target"] + identity_columns]
 ```
 
 ### Preprocess the data
 
 ```{python}
+tokenizer = preprocessing.text.Tokenizer()
+tokenizer.fit_on_texts(train_x) # TODO: add test_x
 
+words, _ = get_individual_words(train_x)
+max_word_len = len(max(words, key=len));
+
+train_tokens = preprocessing.sequence.pad_sequences(
+    tokenizer.texts_to_sequences(train_x),
+    maxlen = max_word_len,
+    padding = "post"
+)
+
+train_data = torch.tensor(train_tokens, dtype=torch.long).to(device)
+train_tags = torch.tensor(train_y.values, dtype=torch.float32).to(device)
 ```
 
 ### Convolutional Neural Network (CNN)
@@ -229,6 +241,75 @@ In RNN the nodes of the network form a directed graph along with a temporal sequ
 
 This section is for LSTM
 
+```{python}
+class LSTMNetwork(nn.Module):
+    def __init__(self, max_word_len, vocab_size, hidden_size, out_size):
+        super(LSTMNetwork, self).__init__()
+        
+        self.embedding = nn.Embedding(vocab_size, max_word_len)
+        self.lstm = nn.LSTM(max_word_len, hidden_size)
+        self.linear = nn.Linear(hidden_size, out_size)
+        
+        self.embedding = nn.Embedding(vocab_size, max_word_len)
+        
+        self.lstm1 = nn.LSTM(max_word_len, hidden_size, bidirectional=True, batch_first=True)
+        self.lstm2 = nn.LSTM(hidden_size * 2, hidden_size, bidirectional=True, batch_first=True)
+    
+        self.linear1 = nn.Linear(hidden_size * 4, hidden_size * 4)
+        self.linear2 = nn.Linear(hidden_size * 4, hidden_size * 4)
+        
+        self.linear_out = nn.Linear(hidden_size * 4, out_size)
+        
+    def forward(self, comment):
+        h_embedding = self.embedding(comment)
+
+        h_lstm1, _ = self.lstm1(h_embedding)
+        h_lstm2, _ = self.lstm2(h_lstm1)
+        
+        # global average pooling
+        avg_pool = torch.mean(h_lstm2, 1)
+        # global max pooling
+        max_pool, _ = torch.max(h_lstm2, 1)
+        
+        h_conc = torch.cat((max_pool, avg_pool), 1)
+        h_conc_linear1  = F.relu(self.linear1(h_conc))
+        h_conc_linear2  = F.relu(self.linear2(h_conc))
+        
+        return self.linear_out(h_conc + h_conc_linear1 + h_conc_linear2)
+```
+
+```{python}
+lstm = LSTMNetwork(max_word_len, len(tokenizer.word_index) + 1, 128, len(train_y.columns))
+criterion = nn.BCEWithLogitsLoss(reduction='mean')
+optimizer = optim.Adam(lstm.parameters(), lr=0.001)
+scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.6 ** epoch)
+```
+
+```{python}
+trainloader = torch.utils.data.DataLoader(
+    torch.utils.data.TensorDataset(train_data, train_tags),
+    batch_size=512,
+    shuffle=True
+)
+
+for epoch in range(4):
+    scheduler.step()
+    lstm.train()
+    print(len(trainloader))
+    for comment, tags in trainloader:
+        comment = comment.to(device)
+        
+        optimizer.zero_grad()
+
+        out = lstm(comment)
+
+        loss = criterion(out, tags)
+        loss.backward()
+        optimizer.step()
+        
+    print(loss)
+        
+```
 
 ### Bi-directional LSTM
 
