@@ -148,12 +148,7 @@ def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
             "cleaned_row_count": [data['comment_text'].nunique()]
         }).to_csv("./"+to_name+"_summary.csv")
         
-        try:
-            # will throw a DataError, when there are no numeric columns present
-            # (such as when reading test data)
-            data = data.groupby('comment_text').mean().reset_index()
-        except pd.core.base.DataError:
-            data = data.groupby('comment_text').first().reset_index()
+        data = data.groupby('comment_text').mean().reset_index()
     data.to_csv("./"+to_name+".csv")
 
 def print_cleanup_summary(filename):
@@ -184,12 +179,19 @@ def read_cleaned_file(from_name, to_name, cols = None, drop_duplicates = True):
 
 ```{python}
 print("reading train data...")
-train_data = read_cleaned_file('train', 'train_cleaned', relevant_columns)
+train_data = read_cleaned_file(
+    'train',
+    'train_cleaned',
+    relevant_columns # discards all other columns
+)
 print_cleanup_summary("train_cleaned")
 
 print("reading test data...")
-test_data = read_cleaned_file('test', 'test_cleaned')
-print_cleanup_summary("test_cleaned")
+test_data = read_cleaned_file(
+    'test', 
+    'test_cleaned', 
+    drop_duplicates = False # we don't want to drop duplicates, as every comment in test_data have to be labelled
+)
 ```
 
 ```{python}
@@ -297,34 +299,35 @@ class LSTMNetwork(nn.Module):
 ```
 
 ```{python}
-lstm = LSTMNetwork(max_word_len, len(tokenizer.word_index) + 1, 128, len(train_y.columns))
+lstm = LSTMNetwork(max_word_len, len(tokenizer.word_index) + 1, 128, len(train_y.columns)).to(device)
 criterion = nn.BCEWithLogitsLoss(reduction='mean')
 optimizer = optim.Adam(lstm.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.6 ** epoch)
 ```
 
 ```{python}
+dataset = torch.utils.data.TensorDataset(train_data_tensor, train_labels_tensor)
 trainloader = torch.utils.data.DataLoader(
-    torch.utils.data.TensorDataset(train_data_tensor, train_labels_tensor),
+    dataset,
     batch_size=512,
-    shuffle=True
+    sampler=torch.utils.data.RandomSampler(dataset, replacement = True, num_samples = 512)
 )
 
-for epoch in range(4):
+for epoch in range(5):
     scheduler.step()
     lstm.train()
-    for comment, labels in trainloader:
-        comment = comment.to(device)
+    for comments, labels in trainloader:
+        comment = comments.to(device)
         
         optimizer.zero_grad()
 
-        out = lstm(comment)
+        out = lstm(comments)
 
         loss = criterion(out, labels)
         loss.backward()
         optimizer.step()
         
-    print(loss)
+    print(n, loss)
         
 ```
 
