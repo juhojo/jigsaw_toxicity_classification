@@ -68,7 +68,7 @@ import os
 from utils import get_individual_words
 from visualizations import visualize_toxicity_by_identity
 
-device = torch.device('cpu')
+device = torch.device("cuda:0")
 ```
 
 ## Analysing the datasets
@@ -129,6 +129,7 @@ def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
     data = pd.read_csv(
         f"../input/jigsaw-unintended-bias-in-toxicity-classification/{from_name}.csv",
         usecols=cols,# use only relevant columns, as specified before in the notebook
+        nrows=1000000,
     )
     data.set_index("id", inplace=True)
 
@@ -273,42 +274,45 @@ class LSTMNetwork(nn.Module):
         super(LSTMNetwork, self).__init__()
         
         self.embedding = nn.Embedding(vocab_size, max_len)
-        self.lstm = nn.LSTM(max_len, hidden_size)
         self.linear = nn.Linear(hidden_size, out_size)
         
         self.embedding = nn.Embedding(vocab_size, max_len)
         
-        self.lstm1 = nn.LSTM(max_len, hidden_size, bidirectional=True, batch_first=True)
-        self.lstm2 = nn.LSTM(hidden_size * 2, hidden_size, bidirectional=True, batch_first=True)
+        self.lstm = nn.LSTM(
+            input_size = max_len,
+            hidden_size = hidden_size,
+            bidirectional = True,
+            batch_first = True,
+            num_layers = 2,
+            dropout = .1
+        )
     
         self.linear1 = nn.Linear(hidden_size * 4, hidden_size * 4)
         self.linear2 = nn.Linear(hidden_size * 4, hidden_size * 4)
         
         self.linear_out = nn.Linear(hidden_size * 4, out_size)
         
-    def forward(self, comment):
-        h_embedding = self.embedding(comment)
-
-        h_lstm1, _ = self.lstm1(h_embedding)
-        h_lstm2, _ = self.lstm2(h_lstm1)
+    def forward(self, x):
+        out = self.embedding(x)
         
-        # global average pooling
-        avg_pool = torch.mean(h_lstm2, 1)
-        # global max pooling
-        max_pool, _ = torch.max(h_lstm2, 1)
+        out, _ = self.lstm(out)
         
-        h_conc = torch.cat((max_pool, avg_pool), 1)
-        h_conc_linear1  = F.relu(self.linear1(h_conc))
-        h_conc_linear2  = F.relu(self.linear2(h_conc))
+        out = torch.cat((
+            torch.max(out, 1)[0], # global max pooling
+            torch.mean(out, 1) # global average pooling
+        ), 1)
         
-        return self.linear_out(h_conc + h_conc_linear1 + h_conc_linear2)
+        out = F.relu(self.linear1(out))
+        out = F.relu(self.linear2(out))
+        
+        return self.linear_out(out)
 ```
 
 ```{python}
 lstm = LSTMNetwork(max_len, len(tokenizer.word_index) + 1, 128, len(train_y.columns)).to(device)
 criterion = nn.BCEWithLogitsLoss(reduction='mean')
 optimizer = optim.Adam(lstm.parameters(), lr=0.001)
-scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.6 ** epoch)
+scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.75 ** epoch)
 ```
 
 ```{python}
@@ -318,14 +322,17 @@ train_loader = torch.utils.data.DataLoader(
     shuffle=True
 )
 
-for epoch in range(5):
+log_nth = 50
+epochs = 4
+
+for epoch in range(epochs):
     epoch_start = time.time()
     scheduler.step()
-    lstm.train()
+    lstm.train() # set lstm to train mode
     total_loss = 0
-    for x, labels in train_loader:
-        x = x.to(device)
-        
+    for i, (x, labels) in enumerate(train_loader, 1):
+        x.to(device)
+
         optimizer.zero_grad()
 
         out = lstm(x)
@@ -333,12 +340,26 @@ for epoch in range(5):
         loss = criterion(out, labels)
         total_loss += loss.item()
         loss.backward()
-        optimizer.step()   
-    print(total_loss / len(train_loader), time.time() - epoch_start)     
+        
+        optimizer.step()
+        
+        if i % log_nth == 0:
+            print(total_loss / i, f"{i} / {len(train_loader)} (batches ran / left to run)")
+    print(
+        f"epoch: {e}/{epochs}",
+        f"loss: {total_loss / len(train_loader)}:.4f",
+        f"time passed: {time.time() - epoch_start}"
+    )
+```
+
+```{python}
+test_data_tensor = torch.tensor(test_tokens, dtype=torch.long).to(device)
 ```
 
 ```{python}
 rows = 1000
+
+lstm.eval() # set lstm to evaluation mode
 
 predictions = pd.DataFrame.from_dict({
     'id': test_data['id'][:rows],
