@@ -312,20 +312,17 @@ scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.6 ** ep
 ```
 
 ```{python}
-dataset = torch.utils.data.TensorDataset(train_data_tensor, train_labels_tensor)
 train_loader = torch.utils.data.DataLoader(
-    dataset,
-    batch_size=512,
-    sampler=torch.utils.data.RandomSampler(dataset, replacement = True, num_samples = 512)
+    torch.utils.data.TensorDataset(train_data_tensor, train_labels_tensor),
+    batch_size=512,    
+    shuffle=True
 )
-
-def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
 
 for epoch in range(5):
     epoch_start = time.time()
     scheduler.step()
     lstm.train()
+    total_loss = 0
     for x, labels in train_loader:
         x = x.to(device)
         
@@ -334,18 +331,19 @@ for epoch in range(5):
         out = lstm(x)
 
         loss = criterion(out, labels)
+        total_loss += loss.item()
         loss.backward()
         optimizer.step()   
-    print(loss, time.time() - epoch_start)     
+    print(total_loss / len(train_loader), time.time() - epoch_start)     
 ```
 
 ```{python}
-test_data_tensor = torch.tensor(test_tokens, dtype=torch.long).to(device)
+rows = 1000
 
 predictions = pd.DataFrame.from_dict({
-    'id': test_data['id'],
-    'comment': test_data['comment_text'],
-    'prediction': torch.sigmoid(lstm(test_data_tensor).detach().cpu())[:, 0]
+    'id': test_data['id'][:rows],
+    'comment': test_data['comment_text'][:rows],
+    'prediction': torch.sigmoid(lstm(test_data_tensor[:rows]).detach().cpu())[:, 0]
 })
 
 print(predictions.sort_values(by=["prediction"]))
