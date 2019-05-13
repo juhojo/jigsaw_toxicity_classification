@@ -64,7 +64,9 @@ import torch.optim as optim
 
 import os
 
-from util import get_individual_words
+# custom helper libraries (provided with the project)
+from utils import get_individual_words
+from visualizations import visualize_target_by_identity
 
 device = torch.device('cpu')
 ```
@@ -193,6 +195,12 @@ test_data = read_cleaned_file(
     'test_cleaned', 
     drop_duplicates = False # we don't want to drop duplicates, as every comment in test_data have to be labelled
 )
+```
+
+### Visualizations of the data
+
+```{python}
+visualize_target_by_identity(train_data, identity_columns)
 ```
 
 ```{python}
