@@ -66,7 +66,6 @@ import os
 
 # custom helper libraries (provided with the project)
 from utils import get_individual_words
-from visualizations import visualize_toxicity_by_identity
 
 device = torch.device("cuda:0")
 ```
@@ -129,7 +128,6 @@ def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
     data = pd.read_csv(
         f"../input/jigsaw-unintended-bias-in-toxicity-classification/{from_name}.csv",
         usecols=cols,# use only relevant columns, as specified before in the notebook
-        nrows=1000000,
     )
     data.set_index("id", inplace=True)
 
@@ -196,9 +194,53 @@ test_data = read_cleaned_file(
     'test_cleaned', 
     drop_duplicates = False # we don't want to drop duplicates, as every comment in test_data have to be labelled
 )
+print("The test data is read to memory")
 ```
 
 ### Visualizations of the data
+
+```{python}
+# Import visualization functions
+from visualizations import (
+    visualize_toxicity_by_identity,
+    visualize_target_distribution,
+    visualize_comment_length
+)
+```
+
+Lets first look at the binary distribution of toxic and non-toxic inputs in the dataset. A message is toxic whenever its toxicity (attribute `target`) is larger than the data toxicity threshold (`.5`).
+
+```{python}
+def calculate_binary_distribution(data):
+    """Calculate percentage of toxic and non-toxic entries"""
+    toxic = 0
+    non_toxic = 0
+    for value in data["target"]:
+        if value >= .5:
+            toxic += 1
+        else:
+            non_toxic += 1
+    data_count = len(data)
+    return (toxic / data_count, non_toxic / data_count)
+```
+
+```{python}
+count_toxic, count_non_toxic = calculate_binary_distribution(train_data)
+
+# Print binary toxicity distribution
+print("Amount of toxic comments {:.2f}% and non-toxic comments {:.2f}%.".format( 
+    count_toxic,
+    count_non_toxic
+))
+```
+
+Next a generic visualization showing the distribution of toxic and non-toxic messages in the dataset.
+
+```{python}
+visualize_target_distribution(train_data)
+```
+
+Toxicity distributions by identity groups.
 
 ```{python}
 visualize_toxicity_by_identity(train_data, identity_columns)
@@ -206,6 +248,13 @@ visualize_toxicity_by_identity(train_data, identity_columns)
 
 ```{python}
 train_data.sort_values(by=["target", "jewish"], ascending=False).head(10)
+```
+
+Comment lengths for the train and validation datasets
+
+```{python}
+visualize_comment_length(train_data, "Comment text lengths for train data")
+visualize_comment_length(test_data, "Comment text lengths for test data")
 ```
 
 > ## Methods
@@ -335,8 +384,10 @@ for epoch in range(epochs):
 
         optimizer.zero_grad()
 
+        print(1)
         out = lstm(x)
-
+        print(2)
+        
         loss = criterion(out, labels)
         total_loss += loss.item()
         loss.backward()
@@ -362,12 +413,12 @@ rows = 1000
 lstm.eval() # set lstm to evaluation mode
 
 predictions = pd.DataFrame.from_dict({
-    'id': test_data['id'][:rows],
-    'comment': test_data['comment_text'][:rows],
-    'prediction': torch.sigmoid(lstm(test_data_tensor[:rows]).detach().cpu())[:, 0]
+    'id': test_data['id'],
+    'comment': test_data['comment_text'],
+    'prediction': torch.sigmoid(lstm(test_data_tensor).detach().cpu())[:, 0]
 })
 
-print(predictions.sort_values(by=["prediction"]))
+print(predictions.tail(10))
 
 predictions[["id", "prediction"]].to_csv('submission_lstm.csv', index=False)
 ```
