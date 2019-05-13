@@ -125,9 +125,8 @@ The operations we do for the datasets are; lowercase the words, remove the non-a
 def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
     """Create a cleaned file from a file"""
     data = pd.read_csv(
-        f"../input/{from_name}.csv",
+        f"../input/jigsaw-unintended-bias-in-toxicity-classification/{from_name}.csv",
         usecols=cols,# use only relevant columns, as specified before in the notebook
-        nrows=10000
     )
     data.set_index("id", inplace=True)
 
@@ -187,6 +186,7 @@ train_data = read_cleaned_file(
 )
 print_cleanup_summary("train_cleaned")
 
+
 print("reading test data...")
 test_data = read_cleaned_file(
     'test', 
@@ -225,26 +225,24 @@ test_x = test_data["comment_text"]
 ### Preprocess the data
 
 ```{python}
-words, _ = get_individual_words(train_x.append(test_x)) # get individual words from train and test data
+sentences = train_x.append(test_x)
 
 tokenizer = preprocessing.text.Tokenizer()
-tokenizer.fit_on_texts(words)
+tokenizer.fit_on_texts(sentences)
 
-max_word_len = len(max(words, key=len));
+max_len = len(sentences.max())
 
 train_tokens = preprocessing.sequence.pad_sequences(
     tokenizer.texts_to_sequences(train_x),
-    maxlen = max_word_len,
+    maxlen = max_len,
 )
 test_tokens = preprocessing.sequence.pad_sequences(
     tokenizer.texts_to_sequences(test_x),
-    maxlen = max_word_len,
+    maxlen = max_len,
 )
 
 train_data_tensor = torch.tensor(train_tokens, dtype=torch.long).to(device)
 train_labels_tensor = torch.tensor(train_y.values, dtype=torch.float32).to(device)
-
-test_data_tensor = torch.tensor(test_tokens, dtype=torch.long).to(device)
 ```
 
 ### Convolutional Neural Network (CNN)
@@ -263,16 +261,16 @@ This section is for LSTM
 
 ```{python}
 class LSTMNetwork(nn.Module):
-    def __init__(self, max_word_len, vocab_size, hidden_size, out_size):
+    def __init__(self, max_len, vocab_size, hidden_size, out_size):
         super(LSTMNetwork, self).__init__()
         
-        self.embedding = nn.Embedding(vocab_size, max_word_len)
-        self.lstm = nn.LSTM(max_word_len, hidden_size)
+        self.embedding = nn.Embedding(vocab_size, max_len)
+        self.lstm = nn.LSTM(max_len, hidden_size)
         self.linear = nn.Linear(hidden_size, out_size)
         
-        self.embedding = nn.Embedding(vocab_size, max_word_len)
+        self.embedding = nn.Embedding(vocab_size, max_len)
         
-        self.lstm1 = nn.LSTM(max_word_len, hidden_size, bidirectional=True, batch_first=True)
+        self.lstm1 = nn.LSTM(max_len, hidden_size, bidirectional=True, batch_first=True)
         self.lstm2 = nn.LSTM(hidden_size * 2, hidden_size, bidirectional=True, batch_first=True)
     
         self.linear1 = nn.Linear(hidden_size * 4, hidden_size * 4)
@@ -299,7 +297,7 @@ class LSTMNetwork(nn.Module):
 ```
 
 ```{python}
-lstm = LSTMNetwork(max_word_len, len(tokenizer.word_index) + 1, 128, len(train_y.columns)).to(device)
+lstm = LSTMNetwork(max_len, len(tokenizer.word_index) + 1, 128, len(train_y.columns)).to(device)
 criterion = nn.BCEWithLogitsLoss(reduction='mean')
 optimizer = optim.Adam(lstm.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.6 ** epoch)
@@ -334,7 +332,9 @@ for epoch in range(5):
 ```
 
 ```{python}
-predictions = pd.DataFrame.from_dict({
+test_data_tensor = torch.tensor(test_tokens, dtype=torch.long).to(device)
+
+predictions = pd.DataFrame.from_dict({o
     'id': test_data['id'],
     'comment': test_data['comment_text'],
     'prediction': torch.sigmoid(lstm(test_data_tensor).detach().cpu())[:, 0]
