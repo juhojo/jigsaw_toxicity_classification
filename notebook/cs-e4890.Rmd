@@ -19,11 +19,13 @@ jupyter:
 
 ## Introduction
 
-The goal of this project is to attempt to solve a toxicity classification problem in the field of natural language processing (NLP). The approach used in this paper discusses neural networks and how they perform for this classification task. We discuss our reasoning, expectations and thoughts of the execution of our project. The toxicity classification problem at hand is due to the increasing amount of discussion platforms such as, comment feeds on live broadcasts and other forums. Some live broadcasts are targeted for wide audiences and need efficient, near instantanious, profanity filtering.
+The goal of this project is to attempt to solve a toxicity classification problem in the field of natural language processing (NLP). The approach used in this paper discusses neural networks and how they perform for this classification task. We discuss our reasoning, expectations and thoughts of the execution of our project. The toxicity classification problem at hand is due to the increasing amount of discussion platforms such as, comment feeds on live broadcasts and other fora. Some live broadcasts are targeted for wide audiences and need efficient, near instantanious, profanity filtering.
 
-Typically, the issue with naïve profanity filtering is focusing too heavily on individual words and ignoring the context. It was studied that names of the frequently attacked identities were automatically accociated to toxicity by machine learning (ML) models, even if the individual(s) themselves, or the context, were not offensive. (Kaggle. 2019) 
+Typically, the issue with naïve profanity filtering is that it focuses too heavily on individual words while ignoring the context. It was studied that names of the frequently attacked identities were automatically accociated to toxicity by machine learning (ML) models, even if the individual(s) themselves, or the context, were not offensive. (Kaggle. 2019)
 
-In this paper, the overall assessment of the goodness of our model is deviced with an overall Area under the curve (AUC) Receiver operating characteristic curve (ROC) test and with multiple other submetrics. The submetrics are:
+### Scope of the project
+
+This paper is for a Kaggle competition ([Jigsaw Unintended Bias in Toxicity Classification](https://www.kaggle.com/c/jigsaw-unintended-bias-in-toxicity-classification/ "Competition page")). The competition provides a grader that evaluates the quality of the resulting model. The overall assessment of the goodness of our model is deviced with an overall Area under the curve (AUC) Receiver operating characteristic curve (ROC) test and with multiple other submetrics. The submetrics are:
 - Bias AUCs: To prevent unintended bias we use three specific subsets of the test for each identity, attemping to capture all the aspects of unintended bias.
      - Subgroup AUC: Focuses on specific identity subgroup
      - Background Positive, Subgroup negative (BSPSN) AUC: Evaluates only non-toxic examples for an identity and toxic examples without the identity
@@ -81,9 +83,9 @@ In addition to `target`, there are several subtypes of toxicity. These are not s
 - identity_attack
 - sexual_explicit
 
-Along with these, we may use attribute `parent_id` for training our model. The reason for this is that we think that the neural network should mark some difference between comments that start a thread versus ones that do not.
+Along with these, it is notable that the attribute `parent_id` could be used for training a model. The reason for this is that we think that the neural network should mark some difference between comments that start a thread versus ones that do not.
 
-Some of the comments have a label for identity. There are multiple identity attributes, each representing the identity that is mentioned in the comment. The identities we are interested, as the ones used in the validation of the model, are:
+Some of the comments have a label for identity. There are multiple identity attributes, each representing the identity that *is mentioned* in the comment. The identities we are interested, as the ones used in the validation of the model, are:
 - male
 - female
 - homosexuality_gay_or_lesbian
@@ -94,7 +96,7 @@ Some of the comments have a label for identity. There are multiple identity attr
 - white
 - psychiatric_or_mental_illness
 
-Based on these, we decided to select the following columns for training the model and drop all other columns:
+Based on this short task description analysis, we made the decision to select the following columns for training the model and drop all other columns:
 
 ```{python}
 identity_columns = [
@@ -118,7 +120,7 @@ relevant_columns = [
 
 ### Cleaning up the data
 
-The dataset contains duplicate comments with same content. However, the different comments may have been labelled with different targets or subgroups [kaggle].
+The data is a little noisy. Example given, there are some reoccurring special characters and the dataset contains duplicate comments with same content. However, the different comments may have been labelled with different targets or subgroups [kaggle].
 
 The operations we do for the datasets are; lowercase the words, remove the non-alpha characters, fill empty values with 0 and preprocess the data so that we obtain a much smaller, more compact, sets for the training and validation.
 
@@ -208,7 +210,9 @@ from visualizations import (
 )
 ```
 
-Lets first look at the binary distribution of toxic and non-toxic inputs in the dataset. A message is toxic whenever its toxicity (attribute `target`) is larger than the data toxicity threshold (`.5`).
+In this section we will attempt to find further details of the data with some basic exploratory data analysis (EDA) techniques.
+
+Now that we have a cleaned version of the datasets we can further analyze and visualize them. Lets first look at the binary distribution of toxic and non-toxic inputs in the dataset. A message is toxic whenever its toxicity (attribute `target`) is larger than the data toxicity threshold (`.5`).
 
 ```{python}
 def calculate_binary_distribution(data):
@@ -240,7 +244,7 @@ Next a generic visualization showing the distribution of toxic and non-toxic mes
 visualize_target_distribution(train_data)
 ```
 
-Toxicity distributions by identity groups.
+Then toxicity distributions by identity groups.
 
 ```{python}
 visualize_toxicity_by_identity(train_data, identity_columns)
@@ -250,14 +254,41 @@ visualize_toxicity_by_identity(train_data, identity_columns)
 train_data.sort_values(by=["target", "jewish"], ascending=False).head(10)
 ```
 
-Comment lengths for the train and validation datasets
+Here, we see the comment lengths (number of characters in a sentence) for the train and validation datasets. The distribution is bimodal but heavily skewed to shorter lengths. The two peaks are at approximately 100 and 1000 character marks. There are only a total of four (4) items in the training dataset with more-than or equal to 1250 characters in the datasets. The corresponding number for the test dataset is three (3).
+
+```{python}
+def count_more_than_equal(data, attr, threshold):
+    try:
+        threshold = float(threshold)
+        count = 0
+        for value in data[attr]:
+            if isinstance(value, str):
+                value = len(value)
+            if value >= threshold:
+                count += 1
+        return count
+    except ValueError:
+        return 0
+```
+
+```{python}
+threshold = 1250
+print("Amount of {} or more character sentences.\ntrain data: {}\ntest data: {}".format(
+    threshold,
+    count_more_than_equal(train_data, "comment_text", threshold),
+    count_more_than_equal(test_data, "comment_text", threshold)
+))
+```
 
 ```{python}
 visualize_comment_length(train_data, "Comment text lengths for train data")
 visualize_comment_length(test_data, "Comment text lengths for test data")
 ```
 
-> ## Methods
+As we can see from the illustrations above, the two datasets have very similar shape and the model should hence yield good results for both the training and the test dataset.
+
+
+## Methods
 
 Natural language processing (NLP) is an example of a Supervised Machine Learning task that focuses in labelled datasets containing sequences and or single words. The purpose of NLP is to train a classifier that can distinguish the sets of words into their right belonging categories (classes).
 
@@ -270,8 +301,15 @@ Typically the text classification pipeline contains the following components:
 
 A prime example of a text classification problem is detection of spam or toxic sentences.
 
-Use of recursive neural networks (RNN) in natural language processing (NLP) is an intuitive and an advisable method. (**SOURCE**) RNNs exceed in grammar learning as the order of words may have an effect on the context of the sentence. This is mainly because their ability to process sequences of inputs, such as, in the case of toxicity filtering, sequences of words.
+Harish Yenala, Ashish Jhanwar, Manoj K. Chinnakotla and Jay Goyal suggest in their paper *Deep learning for detecting inappropriate content in text* to utilize a combination of Convolutional Neural Networks (CNN) and Bi-directional Long short-term memory networks (C-BiLSTM) to achieve a high performing classifier for a task very similar to ours.
 
+More generally, use of recursive neural networks (RNN), LSTM being an example of these, in natural language processing (NLP) is an intuitive and an advisable method. RNNs exceed in grammar learning. This is mainly because their ability to process sequences of inputs, such as, in the case of toxicity filtering, sequences of words.
+
+
+### Preprocess the data
+In the preprocessing we want to perform integer encoding, so that each word is represented by a unique integer. Doing so allows us to later on implement an embedding layer that we need for processing text data.
+
+The purpose of the word embedding is to obtain a dense vector representation of each word. This vector is then capable of, example given, capturing the context of that word, the semantic and syntactic similarity and relation to other words [A Word Embedding based Generalized Language Model for Informal Retrieval pp.795]. 
 
 ```{python}
 train_x = train_data["comment_text"]
@@ -279,8 +317,6 @@ train_y = train_data[["target"] + identity_columns]
 
 test_x = test_data["comment_text"]
 ```
-
-### Preprocess the data
 
 ```{python}
 sentences = train_x.append(test_x)
@@ -305,17 +341,31 @@ train_labels_tensor = torch.tensor(train_y.values, dtype=torch.float32).to(devic
 
 ### Convolutional Neural Network (CNN)
 
-CNNs are feed-forward artificial neural networks. They use a variation of multilayer perceptrons that offer minimal preprocessing. Use of CNNs in NLP is a relatively new technique as previously their primary use case was in computer vision.
+CNNs are feed-forward artificial neural networks. They use a variation of multilayer perceptrons that offer minimal preprocessing. Use of CNNs in NLP is a relatively new technique as previously their primary use case was in computer vision. Use of CNN models for NLP tasks have shown to be effective in semantic parsing **[Yih et al., 2014. Semantic Parsing for Single-Relation Question Answerings of ACL 2014]**, search query retrieval **[Shen et al., 2014. Learning Semantic Representations Using Convolutional Neural Networks for Web Search. In Proceedings of WWW 2014.]**, sentence modeling **[Kalchbrenner et al., 2014. A Convolutional Neural Network for Modelling Sentences, In Proceedings of ACL 2014.]**, and other, more traditional NLP tasks **[Collobert et al., 2011. Natural Language Processing (Almost) from Scratch. Journal of Machine Learning Research 12:2493-2537]**.
 
 
-### Recursive neural network (RNN)
+### Long short-term memory (LSTM)
 
-In RNN the nodes of the network form a directed graph along with a temporal sequence. Each individual input of the sequence is
+LSTM is a recurrent network architecture in conjunction with an efficient, gradient-based learning algorithm. All together LSTM is able to store information over extended time intervals while resolving problems associated with backpropagation through time (BPTT) and real-time recurrent learning (RTRL). **(Hochreiter and Schmidhuber, 1995)[Hochreiter, S. and Schmidhuber, J. (1995). Long short term memory. München: Inst. für Informatik.]**
 
+The greatest advantage of using LSTM for NLP is its ability to handle noise, distributed representations, and continuous values. LSTMs ability to function without a finite number of states enables it to hence work for any sequence lengths and items in the sequence, as long as these are preprocessed to numbers. **(Hochreiter and Schmidhuber, 1995)**
 
-### LSTM
+#### The network
+Our LSTM network consists of embedding and linear layers along with the LSTM defined by PyTorch. The PyTorch LSTM applies a multi-layer long short-term memory RNN to the input sequence. The computation, that the layer does, for each input sequence is:
 
-This section is for LSTM
+$i_t = \sigma(W_{ii}x_t + b_{ii} + W_{hi}h_{(t-1)} + b_{hi})$
+
+$f_t = \sigma(W_{if}x_t + b_{if} + W_{hf}h_{(t-1)} + b_{hf})$
+
+$g_t = \tanh(W_{ig}x_t + b_{ig} + W_{hg}h_{(t-1)} + b_{hg})$
+
+$o_t = \sigma(W_{io}x_t + b_{io} + W_{ho}h_{(t-1)} + b_{ho})$
+
+$c_t = f_t * c_{(t-1)} + i_t * g_t$
+
+$h_t = o_t * \tanh(c_t)$
+
+where $h_t$ is the hidden state at time $t$, $c_t$ is the cell state at time $t$, $x_t$ is the input time at $t$, $h_{(t-1)}$ is the hidden state of the layer at time $t-1$ or the initial hidden state at time $o$, and $i_t$, $f_t$, $g_t$ and $o_t$ are the input, forget, cell, and output gates, respectively. $\sigma$ is the sigmoind function, and $*$ is the Hadamard product. **[PyTorch Documentation]**
 
 ```{python}
 class LSTMNetwork(nn.Module):
@@ -423,9 +473,9 @@ print(predictions.tail(10))
 predictions[["id", "prediction"]].to_csv('submission_lstm.csv', index=False)
 ```
 
-### Bi-directional LSTM
+### Convolutional Bi-Directional LSTM (C-BiLSTM)
 
-foo bar
+A combination network of Convolutional Neural Network and Bi-Directional LSTM.
 
 
 ## Results

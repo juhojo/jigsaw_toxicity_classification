@@ -3,6 +3,7 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 
+data = pd.read_csv("./train_cleaned.csv")
 
 def visualize_toxicity_by_identity(data, columns):
     """Visualizes the toxicity for each identity type"""
@@ -54,3 +55,13 @@ def visualize_comment_length(data, title):
 
     plt.title(title)
     plt.show()
+
+
+def foo(data):
+    count = 0
+    for comment in data["comment_text"]:
+        if len(comment) >= 1250:
+            count += 1
+    print(count)
+
+foo(data)
