@@ -156,7 +156,7 @@ def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
         }).to_csv("./"+to_name+"_summary.csv")
         
         data = data.groupby('comment_text').mean().reset_index()
-    data.to_csv("./"+to_name+".csv")
+    data.to_csv("./"+to_name+".csv", index_label="id")
 
 def print_cleanup_summary(filename):
     # read cleanup summary from saved file
@@ -330,6 +330,8 @@ tokenizer.fit_on_texts(sentences)
 ### Convolutional Neural Network (CNN)
 
 CNNs are feed-forward artificial neural networks. They use a variation of multilayer perceptrons that offer minimal preprocessing. Use of CNNs in NLP is a relatively new technique as previously their primary use case was in computer vision. Use of CNN models for NLP tasks have shown to be effective in semantic parsing **[Yih et al., 2014. Semantic Parsing for Single-Relation Question Answerings of ACL 2014]**, search query retrieval **[Shen et al., 2014. Learning Semantic Representations Using Convolutional Neural Networks for Web Search. In Proceedings of WWW 2014.]**, sentence modeling **[Kalchbrenner et al., 2014. A Convolutional Neural Network for Modelling Sentences, In Proceedings of ACL 2014.]**, and other, more traditional NLP tasks **[Collobert et al., 2011. Natural Language Processing (Almost) from Scratch. Journal of Machine Learning Research 12:2493-2537]**.
+
+Harrison Jansma recommends in his Medium article not to use Dropout **[Harrison J. 2018. Don't Use Dropout in Convolutional Networks. Medium.]**. Dropout is a technique for preventing overfitting in neural networks by randomly drop units (and their connections) from neural network during training **[Srivastana et al., 2014. Dropout: A Simple Way to Prevent Neural Networks from Overfitting. Journal of Machine Learning Research 15:1929-1958]**. According to Jansma, there are two main reasons why use of dropout is declining in CNNs. First, use of dropout is less effective in regularizing convolutional layers in contrast to batch normalization. Secondly, dropout is good for fully connected layers but more recent architectures have moved away from these fully-connected blocks. Hence, it is not the tool for these architectures.
 
 
 ### Long short-term memory (LSTM)
