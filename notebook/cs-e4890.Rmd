@@ -134,7 +134,6 @@ def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
     data = pd.read_csv(
         "../input/jigsaw-unintended-bias-in-toxicity-classification/{}.csv".format(from_name),
         usecols=cols,# use only relevant columns, as specified before in the notebook
-        nrows=10000
     )
     data.set_index("id", inplace=True)
 
