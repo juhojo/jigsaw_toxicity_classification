@@ -69,7 +69,7 @@ import os
 # custom helper libraries (provided with the project)
 from utils import get_individual_words
 
-device = torch.device("cuda:0")
+device = torch.device("cpu")
 
 np.random.seed(int(time.time()))
 torch.manual_seed(int(time.time()))
@@ -134,6 +134,7 @@ def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
     data = pd.read_csv(
         "../input/jigsaw-unintended-bias-in-toxicity-classification/{}.csv".format(from_name),
         usecols=cols,# use only relevant columns, as specified before in the notebook
+        nrows=10000
     )
     data.set_index("id", inplace=True)
 
@@ -359,7 +360,6 @@ where $h_t$ is the hidden state at time $t$, $c_t$ is the cell state at time $t$
 class LSTMNetwork(nn.Module):
     def __init__(self, max_len, vocab_size, hidden_size, out_size):
         super(LSTMNetwork, self).__init__()
-        
         self.embedding = nn.Embedding(vocab_size, max_len)
         
         self.lstm = nn.LSTM(
@@ -368,28 +368,27 @@ class LSTMNetwork(nn.Module):
             bidirectional = True,
             batch_first = True,
             num_layers = 2,
-            dropout = .25
+            dropout = .25,
         )
-    
-        self.linear1 = nn.Linear(hidden_size * 4, hidden_size * 4)
-        self.linear2 = nn.Linear(hidden_size * 4, hidden_size * 4)
         
-        self.linear_out = nn.Linear(hidden_size * 4, out_size)
-        
+        self.net = nn.Sequential(
+            nn.Linear(hidden_size * 4, hidden_size * 4),
+            nn.ELU(),
+            nn.Linear(hidden_size * 4, hidden_size * 4),
+            nn.ELU(),
+            nn.Linear(hidden_size * 4, out_size)
+        )
+
     def forward(self, x):
-        out = self.embedding(x)
-        
-        out, _ = self.lstm(out)
+        embedding = self.embedding(x)
+        out, _ = self.lstm(embedding)
         
         out = torch.cat((
             torch.max(out, 1)[0], # global max pooling
             torch.mean(out, 1) # global average pooling
         ), 1)
-        
-        out = F.relu(self.linear1(out))
-        out = F.relu(self.linear2(out))
-        
-        return self.linear_out(out)
+
+        return self.net(out)
 ```
 
 ```{python}
@@ -491,8 +490,61 @@ predictions[["id", "prediction"]] \
 
 A combination network of Convolutional Neural Network and Bi-Directional LSTM.
 
+```{python}
+class LSTMNetwork(nn.Module):
+    def __init__(self, max_len, vocab_size, hidden_size, out_size):
+        super(LSTMNetwork, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, max_len)
+        
+        self.conv = nn.Sequential( # [1024, 175, 175])
+            nn.Conv1d(max_len, hidden_size, 3, padding = 1),
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(),
+            nn.Conv1d(hidden_size, hidden_size, 3, padding = 1),
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(),
+            nn.Conv1d(hidden_size, hidden_size, 3, padding = 1),
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(),
+        )
+        
+        self.lstm = nn.LSTM(
+            input_size = max_len,
+            hidden_size = hidden_size,
+            bidirectional = True,
+            batch_first = True,
+            num_layers = 2
+        )
+        
+        self.net = nn.Sequential(
+            nn.Linear(hidden_size * 4, hidden_size * 4),
+            nn.ELU(),
+            nn.Linear(hidden_size * 4, hidden_size * 4),
+            nn.ELU(),
+            nn.Linear(hidden_size * 4, out_size)
+        )
+
+    def forward(self, x):
+        embedding = self.embedding(x)
+        out, _ = self.lstm(self.conv(embedding))
+        
+        out = torch.cat((
+            torch.max(out, 1)[0], # global max pooling
+            torch.mean(out, 1) # global average pooling
+        ), 1)
+
+        return self.net(out)
+```
 
 ## Results
+
+We tried above networks with tweaking the parameters and network structures. However, due to limited time reserved to project and computational resources we were not able to try enough alterations. 
+
+| activation fn | score   | lr coefficient | dropout | hidden size | lstm_layers |
+|---------------|---------|----------------|---------|-------------|-------------|
+| ELU           | 0.91227 | .7             | .25     | 128         | 2           |
+| ReLU          | 0.89617 | .5             | .25     | 128         | 2           |
+| ReLU          | 0.90599 | .7             | .25     | 128         | 4           |
 
 
 ## Conclusions
