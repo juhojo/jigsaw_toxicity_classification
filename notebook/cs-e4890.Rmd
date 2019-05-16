@@ -129,18 +129,94 @@ The data is a little noisy. Example given, there are some reoccurring special ch
 The operations we do for the datasets are; lowercase the words, remove the non-alpha characters, fill empty values with 0 and preprocess the data so that we obtain a much smaller, more compact, sets for the training and validation.
 
 ```{python}
+replace_spelling = {
+    "I'd": 'I would',
+    "I'll": 'I will',
+    "I'm": 'I am',
+    "I've": 'I have',
+    "ain't": 'is not',
+    "aren't": 'are not',
+    "can't": 'cannot',
+    'colour': 'color',
+    "could've": 'could have',
+    "couldn't": 'could not',
+    "didn't": 'did not',
+    "doesn't": 'does not',
+    "don't": 'do not',
+    "hadn't": 'had not',
+    "hasn't": 'has not',
+    "haven't": 'have not',
+    "he'd": 'he would',
+    "he'll": 'he will',
+    "he's": 'he is',
+    "here's": 'here is',
+    "how's": 'how is',
+    "i'd": 'i would',
+    "i'll": 'i will',
+    "i'm": 'i am',
+    "i've": 'i have',
+    "isn't": 'is not',
+    "it'll": 'it will',
+    "it's": 'it is',
+    "let's": 'let us',
+    "might've": 'might have',
+    "must've": 'must have',
+    "she'd": 'she would',
+    "she'll": 'she will',
+    "she's": 'she is',
+    "shouldn't": 'should not',
+    "that's": 'that is',
+    'theatre': 'theater',
+    "there's": 'there is',
+    "they'd": 'they would',
+    "they'll": 'they will',
+    "they're": 'they are',
+    "they've": 'they have',
+    'travelling': 'traveling',
+    "wasn't": 'was not',
+    "we'd": 'we would',
+    "we'll": 'we will',
+    "we're": 'we are',
+    "we've": 'we have',
+    "weren't": 'were not',
+    "what's": 'what is',
+    "where's": 'where is',
+    "who'll": 'who will',
+    "who's": 'who is',
+    "who've": 'who have',
+    "won't": 'will not',
+    "would've": 'would have',
+    "wouldn't": 'would not',
+    "you'd": 'you would',
+    "you'll": 'you will',
+    "you're": 'you are',
+    "you've": 'you have'
+}
+```
+
+```{python}
+def clean_sentence(sentence):
+    return re.sub(
+        "[^a-z\d\s]", # Remove all non-alphanumeric or space characters from comment text
+        " ",
+        " ".join(map(
+            lambda word: replace_spelling[word] if word in replace_spelling else word,
+            sentence.lower().split()
+        )).replace("'", "") # ... and drop all remaining ' -marks (as we do not want to replace them with spaces)
+    )
+
 def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
     """Create a cleaned file from a file"""
     data = pd.read_csv(
         "../input/jigsaw-unintended-bias-in-toxicity-classification/{}.csv".format(from_name),
         usecols=cols,# use only relevant columns, as specified before in the notebook
+        nrows=1000
     )
     data.set_index("id", inplace=True)
 
     _, original_word_count = get_individual_words(data["comment_text"])
 
-    # Remove all non-alphanumeric or space characters from comment text
-    data["comment_text"] = data["comment_text"].transform(lambda s: re.sub("[^a-z\d\s]", " ", s.lower()))
+    data["comment_text"] = data["comment_text"].transform(clean_sentence)
     data = data.fillna(0) # fill empty values with 0
 
     if drop_duplicates:
@@ -178,10 +254,10 @@ def print_cleanup_summary(filename):
     ))
     
 def read_cleaned_file(from_name, to_name, cols = None, drop_duplicates = True):
-    if not os.path.isfile("./"+to_name+".csv"):
+    if True or not os.path.isfile("./{}.csv".format(to_name)):
         create_cleaned_file(from_name, to_name, cols, drop_duplicates)
     # read data from cleaned data file if not already set
-    return  pd.read_csv("./"+to_name+".csv")
+    return  pd.read_csv("./{}.csv".format(to_name))
 ```
 
 ```{python}
@@ -373,11 +449,9 @@ class LSTMNetwork(nn.Module):
         )
         
         self.net = nn.Sequential(
-            nn.Linear(hidden_size * 4, hidden_size * 4),
+            nn.Linear(hidden_size * 4, hidden_size * 2),
             nn.ELU(),
-            nn.Linear(hidden_size * 4, hidden_size * 4),
-            nn.ELU(),
-            nn.Linear(hidden_size * 4, out_size)
+            nn.Linear(hidden_size * 2, out_size)
         )
 
     def forward(self, x):
