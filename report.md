@@ -60,7 +60,7 @@ where:
 
 None of this is relevant until we have inspected and manipulated the data by different methods (e.g. converting that's -> that is). After analyzing the data, we hope to get some instincts on how to construct the networks. After the data manipulation is done, we will feed it to a neural network hoping for results. That is, the scores of the AUCs above.
 
-Our initial plan is to use Convolution Neural Networks (CNNs) because they have been shown effective for various natural language processing (NLP) problems. In addition to CNNs, we will implement a Long short-term memory (LSTM) recurrent neural network (RNN) or a GRU network (another variation of RNN), and compare those results to the results obtained by CNNs.
+Our initial plan is to use Convolution Neural Networks (CNNs) because they have been shown effective for various NLP problems. In addition to CNNs, we will implement a Long Short-Term Memory (LSTM) Recurrent Neural Network (RNN) or a Gated Recurrent Unit (GRU) network (another variation of RNN), and compare those results to the results obtained by CNNs.
 
 ## Analysing the datasets
 
@@ -79,7 +79,9 @@ In addition to `target`, there are several subtypes of toxicity. These are not s
 
 Along with these, it is notable that the attribute `parent_id` could be used for training a model. The reason for this is that we think that the neural network should mark some difference between comments that start a thread versus ones that do not.
 
-Some of the comments have a label for identity. We were interested only of the identity attributes, which had more than `500` occurancies in the training data set. Each identity represents that *is mentioned* in the comment. The identities we are interested, as the ones used in the validation of the model, are:
+The labels for the training data were obtained by displaying the comments to several annotators, which then rated the toxicity of each comment. The `target` column is aggregated from the subtypes of toxity, and we only use this column in our approach.
+
+Some of the comments have a label for identity, which were attained in a similiar manner to toxicity labels. We were interested only of the identity attributes, which had more than `500` occurancies in the training data set. Each identity represents that *is mentioned* in the comment. The identities we are interested, as the ones used in the validation of the model, are:
 
 - male
 - female
@@ -92,9 +94,6 @@ Some of the comments have a label for identity. We were interested only of the i
 - psychiatric_or_mental_illness
 
 Identities we dropped were: *transgender, other_gender, heterosexual, bisexual, other_sexual_orientation, hindu, buddhist, atheist, other_religion, asian, latino, other_race_or_ethnicity, physical_disability, intellectual_or_learning_disability, other_disability*
-
-
-Based on this short task description analysis, we made the decision to select the following columns for training the model and drop all other columns:
 
 ### Cleaning up the data
 
@@ -186,18 +185,9 @@ test_data = read_cleaned_file(
 print("The test data is read to memory")
 ```
 
-### Visualizations of the data
+### Exploratory data analysis (EDA)
 
-```{python}
-# Import visualization functions
-from visualizations import (
-    visualize_toxicity_by_identity,
-    visualize_target_distribution,
-    visualize_comment_length
-)
-```
-
-In this section we will attempt to find further details of the data with some basic exploratory data analysis (EDA) techniques.
+In this section we will attempt to find further details of the data with some basic exploratory data analysis (EDA) techniques. This includes, example given, data distribution tables and visualizations.
 
 Now that we have a cleaned version of the datasets we can further analyze and visualize them. Lets first look at the binary distribution of toxic and non-toxic inputs in the dataset. A message is toxic whenever its toxicity (attribute `target`) is larger than the data toxicity threshold (`.5`).
 
@@ -225,7 +215,9 @@ print("Amount of toxic comments {:.2f}% and non-toxic comments {:.2f}%.".format(
 ))
 ```
 
-Next a generic visualization showing the distribution of toxic and non-toxic messages in the dataset.
+As we can see, most of the sentences are non-toxic. It might then be possible to flag a sentence as toxic by just having a few specific word pairings within each identity group.
+
+Next, a generic visualization showing the distribution of toxic and non-toxic messages in the dataset.
 
 ```{python}
 visualize_target_distribution(train_data)
@@ -241,7 +233,7 @@ visualize_toxicity_by_identity(train_data, identity_columns)
 train_data.sort_values(by=["target", "jewish"], ascending=False).head(10)
 ```
 
-Here, we see the comment lengths (number of characters in a sentence) for the train and validation datasets. The distribution is bimodal but heavily skewed to shorter lengths. The two peaks are at approximately 100 and 1000 character marks. There are only a total of four (4) items in the training dataset with more-than or equal to 1250 characters in the datasets. The corresponding number for the test dataset is three (3).
+Here, we see the comment lengths (number of characters in a sentence) for the train and validation datasets. The distribution is bimodal but heavily skewed to shorter lengths. The two peaks are at approximately `100` and `1000` character marks. There are only a total of four (`4`) items in the training dataset with more-than or equal to `1250` characters in the datasets. The corresponding number for the test dataset is three (`3`).
 
 ```{python}
 def count_more_than_equal(data, attr, threshold):
@@ -274,10 +266,9 @@ visualize_comment_length(test_data, "Comment text lengths for test data")
 
 As we can see from the illustrations above, the two datasets have very similar shape and the model should hence yield good results for both the training and the test dataset.
 
-
 ## Methods
 
-Natural language processing (NLP) is an example of a Supervised Machine Learning task that focuses in labelled datasets containing sequences and or single words. The purpose of NLP is to train a classifier that can distinguish the sets of words into their right belonging categories (classes).
+A prime example of a text classification problem is detection of spam or toxic sentences, like the task at hand. Toxicity detection from text is a Supervised Machine Learning task that focuses in labelled datasets containing sequences and or single words. The purpose of our algorithm is to train a classifier that can label the sets of words (comment content) by its toxicity.
 
 Typically the text classification pipeline contains the following components:
 
@@ -285,27 +276,23 @@ Typically the text classification pipeline contains the following components:
 - Feature vector: A vector that describe the input texts, in some charasteristic or multiple ones
 - Labels: The classes that we plan to predict with our trained model
 - Algorithm: A machine learning algorithm that is used to classify the inputs
-- Model: The result of the training, this will perform the label predictions (https://medium.com/jatana/report-on-text-classification-using-cnn-rnn-han-f0e887214d5f)
+- Model: The result of the training, this will perform the label predictions (Maheshwari, 2018)
 
-A prime example of a text classification problem is detection of spam or toxic sentences.
+Some studies suggest to utilize a combination of CNNs and Bi-directional LSTMs (C-BiLSTM) to achieve a high performing classifier for a test very similar to ours (Yenala et al., 2014).
 
-Harish Yenala, Ashish Jhanwar, Manoj K. Chinnakotla and Jay Goyal suggest in their paper *Deep learning for detecting inappropriate content in text* to utilize a combination of Convolutional Neural Networks (CNN) and Bi-directional Long short-term memory networks (C-BiLSTM) to achieve a high performing classifier for a task very similar to ours.
-
-More generally, use of recursive neural networks (RNN), LSTM being an example of these, in natural language processing (NLP) is an intuitive and an advisable method. RNNs exceed in grammar learning. This is mainly because their ability to process sequences of inputs, such as, in the case of toxicity filtering, sequences of words.
+More generally, use of RNNs, LSTM being an example of these, in NLP is an intuitive and an advisable method. RNNs exceed in grammar learning. This is mainly because their ability to process sequences of inputs, such as, in the case of toxicity filtering, sequences of words.
 
 ### Preprocess the data
 
-In the preprocessing we want to perform integer encoding, so that each word is represented by a unique integer. Doing so allows us to later on implement an embedding layer that we need for processing text data.
+Before feeding the comment contents to the model, we want to perform integer encoding of its contents. We do this by using tokenizer provided by `Keras` -library. The tokenizer transforms text content into sequence of integers. Doing this allows us to later on implement an embedding layer that we need for processing text data.
 
 The purpose of the word embedding is to obtain a dense vector representation of each word. This vector is then capable of, example given, capturing the context of that word, the semantic and syntactic similarity and relation to other words [A Word Embedding based Generalized Language Model for Informal Retrieval pp.795].
 
 ```{python}
 train_x = train_data["comment_text"]
 train_y = train_data[["target"] + identity_columns]
-```
 
-```{python}
-sentences = train_x.append(test_data["comment_text"])
+sentences = train_x.append(test_data["comment_text"]) # get all sentences present in training and test data
 
 tokenizer = preprocessing.text.Tokenizer()
 tokenizer.fit_on_texts(sentences)
@@ -316,7 +303,6 @@ tokenizer.fit_on_texts(sentences)
 CNNs are feed-forward artificial neural networks. They use a variation of multilayer perceptrons that offer minimal preprocessing. Use of CNNs in NLP is a relatively new technique as previously their primary use case was in computer vision. Use of CNN models for NLP tasks have shown to be effective in semantic parsing **[Yih et al., 2014. Semantic Parsing for Single-Relation Question Answerings of ACL 2014]**, search query retrieval **[Shen et al., 2014. Learning Semantic Representations Using Convolutional Neural Networks for Web Search. In Proceedings of WWW 2014.]**, sentence modeling **[Kalchbrenner et al., 2014. A Convolutional Neural Network for Modelling Sentences, In Proceedings of ACL 2014.]**, and other, more traditional NLP tasks **[Collobert et al., 2011. Natural Language Processing (Almost) from Scratch. Journal of Machine Learning Research 12:2493-2537]**.
 
 Harrison Jansma recommends in his Medium article not to use Dropout **[Harrison J. 2018. Don't Use Dropout in Convolutional Networks. Medium.]**. Dropout is a technique for preventing overfitting in neural networks by randomly drop units (and their connections) from neural network during training **[Srivastana et al., 2014. Dropout: A Simple Way to Prevent Neural Networks from Overfitting. Journal of Machine Learning Research 15:1929-1958]**. According to Jansma, there are two main reasons why use of dropout is declining in CNNs. First, use of dropout is less effective in regularizing convolutional layers in contrast to batch normalization. Secondly, dropout is good for fully connected layers but more recent architectures have moved away from these fully-connected blocks. Hence, it is not the tool for these architectures.
-
 
 ### Long short-term memory (LSTM)
 
@@ -387,7 +373,7 @@ class LSTMNetwork(nn.Module):
 max_len = len(sentences.max())
 
 lstm = LSTMNetwork(max_len, len(tokenizer.word_index) + 1, 128, len(train_y.columns)).to(device)
-criterion = nn.BCEWithLogitsLoss(reduction='mean')
+criterion = nn.BCEWithLogitsLoss(reduction="mean")
 optimizer = optim.Adam(lstm.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: .7 ** epoch)
 ```
@@ -466,8 +452,8 @@ for i in range(chunks):
     predictions = pd.concat([
         predictions,
         pd.DataFrame({
-            'id': test_data['id'][first:last],
-            'prediction': torch.sigmoid(
+            "id": test_data["id"][first:last],
+            "prediction": torch.sigmoid(
                 lstm(test_data_tensor).detach().cpu() # need to copy the memory to cpu before casting to numpy array
             )[:, 0]
         })
@@ -475,7 +461,7 @@ for i in range(chunks):
 
 assert len(predictions) == len(test_tokens)
 predictions[["id", "prediction"]] \
-    .to_csv('./submission.csv', index=False)
+    .to_csv("./submission.csv", index=False)
 ```
 
 ### Convolutional Bi-Directional LSTM (C-BiLSTM)
@@ -540,6 +526,8 @@ We tried above networks with tweaking the parameters and network structures. How
 Yenala, H., Jhanwar, A., Chinnakotla, M.K. et al. Int J Data Sci Anal (2018) 6: 273. [](https://doi.org/10.1007/s41060-017-0088-4)
 
 https://pytorch.org/tutorials/beginner/nlp/word_embeddings_tutorial.html
+Maheshwari (https://medium.com/jatana/report-on-text-classification-using-cnn-rnn-han-f0e887214d5f)
+Harish Yenala, Ashish Jhanwar, Manoj K. Chinnakotla and Jay Goyal (Deep learning for detecting inappropriate content in text)
 
 ## Appendix
 
@@ -595,66 +583,66 @@ relevant_columns = [
 
 ```{python}
 replace_spelling = {
-    "I'd": 'I would',
-    "I'll": 'I will',
-    "I'm": 'I am',
-    "I've": 'I have',
-    "ain't": 'is not',
-    "aren't": 'are not',
-    "can't": 'cannot',
+    "I'd": "I would",
+    "I'll": "I will",
+    "I'm": "I am",
+    "I've": "I have",
+    "ain't": "is not",
+    "aren't": "are not",
+    "can't": "cannot",
     'colour': 'color',
-    "could've": 'could have',
-    "couldn't": 'could not',
-    "didn't": 'did not',
-    "doesn't": 'does not',
-    "don't": 'do not',
-    "hadn't": 'had not',
-    "hasn't": 'has not',
-    "haven't": 'have not',
-    "he'd": 'he would',
-    "he'll": 'he will',
-    "he's": 'he is',
-    "here's": 'here is',
-    "how's": 'how is',
-    "i'd": 'i would',
-    "i'll": 'i will',
-    "i'm": 'i am',
-    "i've": 'i have',
-    "isn't": 'is not',
-    "it'll": 'it will',
-    "it's": 'it is',
-    "let's": 'let us',
-    "might've": 'might have',
-    "must've": 'must have',
-    "she'd": 'she would',
-    "she'll": 'she will',
-    "she's": 'she is',
-    "shouldn't": 'should not',
-    "that's": 'that is',
+    "could've": "could have",
+    "couldn't": "could not",
+    "didn't": "did not",
+    "doesn't": "does not",
+    "don't": "do not",
+    "hadn't": "had not",
+    "hasn't": "has not",
+    "haven't": "have not",
+    "he'd": "he would",
+    "he'll": "he will",
+    "he's": "he is",
+    "here's": "here is",
+    "how's": "how is",
+    "i'd": "i would",
+    "i'll": "i will",
+    "i'm": "i am",
+    "i've": "i have",
+    "isn't": "is not",
+    "it'll": "it will",
+    "it's": "it is",
+    "let's": "let us",
+    "might've": "might have",
+    "must've": "must have",
+    "she'd": "she would",
+    "she'll": "she will",
+    "she's": "she is",
+    "shouldn't": "should not",
+    "that's": "that is",
     'theatre': 'theater',
-    "there's": 'there is',
-    "they'd": 'they would',
-    "they'll": 'they will',
-    "they're": 'they are',
-    "they've": 'they have',
+    "there's": "there is",
+    "they'd": "they would",
+    "they'll": "they will",
+    "they're": "they are",
+    "they've": "they have",
     'travelling': 'traveling',
-    "wasn't": 'was not',
-    "we'd": 'we would',
-    "we'll": 'we will',
-    "we're": 'we are',
-    "we've": 'we have',
-    "weren't": 'were not',
-    "what's": 'what is',
-    "where's": 'where is',
-    "who'll": 'who will',
-    "who's": 'who is',
-    "who've": 'who have',
-    "won't": 'will not',
-    "would've": 'would have',
-    "wouldn't": 'would not',
-    "you'd": 'you would',
-    "you'll": 'you will',
-    "you're": 'you are',
-    "you've": 'you have'
+    "wasn't": "was not",
+    "we'd": "we would",
+    "we'll": "we will",
+    "we're": "we are",
+    "we've": "we have",
+    "weren't": "were not",
+    "what's": "what is",
+    "where's": "where is",
+    "who'll": "who will",
+    "who's": "who is",
+    "who've": "who have",
+    "won't": "will not",
+    "would've": "would have",
+    "wouldn't": "would not",
+    "you'd": "you would",
+    "you'll": "you will",
+    "you're": "you are",
+    "you've": "you have"
 }
 ```
