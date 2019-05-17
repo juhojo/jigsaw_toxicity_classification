@@ -1,6 +1,6 @@
 # CS-E4890 – Jigsaw Unintended Bias in Toxicity Classification
 
-- [CS-E4890 – Jigsaw Unintended Bias in Toxicity Classification](#cs-e4890-%E2%80%93-jigsaw-unintended-bias-in-toxicity-classification)
+<!-- - [CS-E4890 – Jigsaw Unintended Bias in Toxicity Classification](#cs-e4890-%E2%80%93-jigsaw-unintended-bias-in-toxicity-classification)
   - [Abstract](#abstract)
   - [Introduction](#introduction)
     - [Scope of the project](#scope-of-the-project)
@@ -18,9 +18,11 @@
   - [Conclusions](#conclusions)
   - [References](#references)
   - [Appendix](#appendix)
-    - [A. Spelling replacements](#a-spelling-replacements)
+    - [A. Spelling replacements](#a-spelling-replacements) -->
 
 ## Abstract
+
+TODO
 
 ## Introduction
 
@@ -28,9 +30,11 @@ The goal of this project is to attempt to solve a toxicity classification proble
 
 Typically, the issue with naïve profanity filtering is that it focuses too heavily on individual words while ignoring the context. It was studied that names of the frequently attacked identities were automatically accociated to toxicity by machine learning (ML) models, even if the individual(s) themselves, or the context, were not offensive. (Kaggle. 2019)
 
+To reach the goal of the project, a proper classifier, we have divided the workload into three sections: Analyzation and manipulation of the datasets, design and construction of the networks, and reporting of the attained results. At the beginning we will do appropriate research to design the network. However, some parts of the network will be designed on the go, through trial and error.
+
 ### Scope of the project
 
-This paper is for a Kaggle competition ([Jigsaw Unintended Bias in Toxicity Classification](https://www.kaggle.com/c/jigsaw-unintended-bias-in-toxicity-classification/ "Competition page")). The competition provides a grader that evaluates the quality of the resulting model. The overall assessment of the goodness of our model is deviced with an overall Area under the curve (AUC) Receiver operating characteristic curve (ROC) test and with multiple other submetrics. The submetrics are:
+This paper is intented to describe the project for a Kaggle competition ([Jigsaw Unintended Bias in Toxicity Classification](https://www.kaggle.com/c/jigsaw-unintended-bias-in-toxicity-classification/ "Competition page")). The competition provides a grader that evaluates the quality of the resulting model. The overall assessment of the goodness of our model is deviced with an overall Area under the curve (AUC) Receiver operating characteristic curve (ROC) test and with multiple other submetrics. The submetrics are:
 
 - Bias AUCs: To prevent unintended bias we use three specific subsets of the test for each identity, attemping to capture all the aspects of unintended bias.
   - Subgroup AUC: Focuses on specific identity subgroup
@@ -54,39 +58,15 @@ where:
 - $m_s,a$ = bias metric for identity subgroup $s$ using submetric $a$
 - $w_a$ = a weighting for the relative importance of each submetric; all four $w$ values set to 0.25
 
-## Imports and Utilities
+None of this is relevant until we have inspected and manipulated the data by different methods (e.g. converting that's -> that is). After analyzing the data, we hope to get some instincts on how to construct the networks. After the data manipulation is done, we will feed it to a neural network hoping for results. That is, the scores of the AUCs above.
 
-```{python}
-import numpy as np # linear algebra
-import pandas as pd # data processing, CSV file I/O
-import re # regexes
-import matplotlib.pyplot as plt # plotting
-import os
-import time
-
-from keras import preprocessing
-import torch
-import torch.utils.data
-from torch import nn
-from torch.nn import functional as F
-import torch.optim as optim
-
-import os
-
-# custom helper libraries (provided with the project)
-from utils import get_individual_words
-
-device = torch.device("cpu")
-
-np.random.seed(int(time.time()))
-torch.manual_seed(int(time.time()))
-torch.backends.cudnn.deterministic = True
-```
+Our initial plan is to use Convolution Neural Networks (CNNs) because they have been shown effective for various natural language processing (NLP) problems. In addition to CNNs, we will implement a Long short-term memory (LSTM) recurrent neural network (RNN) or a GRU network (another variation of RNN), and compare those results to the results obtained by CNNs.
 
 ## Analysing the datasets
 
-The origin of the data is from
-year 2017 when the Civil Comments platform shut down and published their ~2m public comments making them available for researchers. Each item in the dataset  has one primary attribute for the toxicity, `target`, indicating a goal value that the models should try to achieve. The trained model should then predict the `target` toxicity for the test data.
+The data originates from year 2017, when the Civil Comments platform shut down and published their ~2m public comments making them available for researchers. Each item in the dataset has one primary attribute for the toxicity, `target`, indicating a goal value that the models should try to achieve. The trained model should then predict the `target` toxicity for the test data.
+
+The training data originally consisted of `1804874` sentences. We managed to reduce this amount by `30578` rows, which brought the number of total rows to `1774296`. This process is later described in this document. The sentences had altogether n individual words, which we managed to reduce by n words.
 
 In addition to `target`, there are several subtypes of toxicity. These are not supposed to be predicted by the model, but they are for providing additional avenue for future research. The subtype attributes are:
 
@@ -99,7 +79,7 @@ In addition to `target`, there are several subtypes of toxicity. These are not s
 
 Along with these, it is notable that the attribute `parent_id` could be used for training a model. The reason for this is that we think that the neural network should mark some difference between comments that start a thread versus ones that do not.
 
-Some of the comments have a label for identity. There are multiple identity attributes, each representing the identity that *is mentioned* in the comment. The identities we are interested, as the ones used in the validation of the model, are:
+Some of the comments have a label for identity. We were interested only of the identity attributes, which had more than `500` occurancies in the training data set. Each identity represents that *is mentioned* in the comment. The identities we are interested, as the ones used in the validation of the model, are:
 
 - male
 - female
@@ -111,33 +91,16 @@ Some of the comments have a label for identity. There are multiple identity attr
 - white
 - psychiatric_or_mental_illness
 
+Identities we dropped were: *transgender, other_gender, heterosexual, bisexual, other_sexual_orientation, hindu, buddhist, atheist, other_religion, asian, latino, other_race_or_ethnicity, physical_disability, intellectual_or_learning_disability, other_disability*
+
+
 Based on this short task description analysis, we made the decision to select the following columns for training the model and drop all other columns:
-
-```{python}
-identity_columns = [
-    "male",
-    "female",
-    "homosexual_gay_or_lesbian",
-    "christian",
-    "jewish",
-    "muslim",
-    "black",
-    "white",
-    "psychiatric_or_mental_illness"
-]
-
-relevant_columns = [
-    "id",
-    "target",
-    "comment_text"
-] + identity_columns
-```
 
 ### Cleaning up the data
 
-The data is a little noisy. Example given, there are some reoccurring special characters and the dataset contains duplicate comments with same content. However, the different comments may have been labelled with different targets or subgroups [kaggle].
+The data is a little noisy. Example given, there are some reoccurring special characters and the dataset contains duplicate comments with same content. However, the different comments may have been labelled with different targets or subgroups (Kaggle, 2019).
 
-The operations we do for the datasets are; lowercase the words, remove the non-alpha characters, fill empty values with 0 and preprocess the data so that we obtain a much smaller, more compact, sets for the training and validation.
+The operations we do for the datasets are; lowercase the words, remove the non-alpha characters, uniform spelling, fill empty values with 0 and preprocess the data so that we obtain a much smaller, more compact, sets for the training and validation.
 
 ```{python}
 def clean_sentence(sentence):
@@ -580,7 +543,55 @@ https://pytorch.org/tutorials/beginner/nlp/word_embeddings_tutorial.html
 
 ## Appendix
 
-### A. Spelling replacements
+## A. Imports
+
+```{python}
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O
+import re # regexes
+import matplotlib.pyplot as plt # plotting
+import os
+import time
+
+from keras import preprocessing
+import torch
+import torch.utils.data
+from torch import nn
+from torch.nn import functional as F
+import torch.optim as optim
+
+import os
+
+device = torch.device("cpu")
+
+np.random.seed(int(time.time()))
+torch.manual_seed(int(time.time()))
+torch.backends.cudnn.deterministic = True
+```
+
+### B. Columns
+
+```{python}
+identity_columns = [
+    "male",
+    "female",
+    "homosexual_gay_or_lesbian",
+    "christian",
+    "jewish",
+    "muslim",
+    "black",
+    "white",
+    "psychiatric_or_mental_illness"
+]
+
+relevant_columns = [
+    "id",
+    "target",
+    "comment_text"
+] + identity_columns
+```
+
+### C. Spelling replacements
 
 ```{python}
 replace_spelling = {
