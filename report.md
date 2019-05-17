@@ -1,32 +1,42 @@
 # CS-E4890 – Jigsaw Unintended Bias in Toxicity Classification
 
-<!-- - [CS-E4890 – Jigsaw Unintended Bias in Toxicity Classification](#cs-e4890-%E2%80%93-jigsaw-unintended-bias-in-toxicity-classification)
+- [CS-E4890 – Jigsaw Unintended Bias in Toxicity Classification](#cs-e4890-%E2%80%93-jigsaw-unintended-bias-in-toxicity-classification)
   - [Abstract](#abstract)
   - [Introduction](#introduction)
     - [Scope of the project](#scope-of-the-project)
-  - [Imports and Utilities](#imports-and-utilities)
   - [Analysing the datasets](#analysing-the-datasets)
     - [Cleaning up the data](#cleaning-up-the-data)
-    - [Visualizations of the data](#visualizations-of-the-data)
+    - [Exploratory data analysis (EDA)](#exploratory-data-analysis-eda)
   - [Methods](#methods)
     - [Preprocess the data](#preprocess-the-data)
     - [Convolutional Neural Network (CNN)](#convolutional-neural-network-cnn)
     - [Long short-term memory (LSTM)](#long-short-term-memory-lstm)
-      - [The network](#the-network)
     - [Convolutional Bi-Directional LSTM (C-BiLSTM)](#convolutional-bi-directional-lstm-c-bilstm)
   - [Results](#results)
   - [Conclusions](#conclusions)
   - [References](#references)
   - [Appendix](#appendix)
-    - [A. Spelling replacements](#a-spelling-replacements) -->
+  - [A. Imports](#a-imports)
+    - [B. Columns](#b-columns)
+    - [C. Spelling replacements](#c-spelling-replacements)
+    - [D. Utility functions](#d-utility-functions)
+    - [E. Visualization functions](#e-visualization-functions)
+    - [F. Training](#f-training)
+    - [G. Obtaining results](#g-obtaining-results)
 
 ## Abstract
 
+Yhteenveto Introductionista
 
+This paper describes the process of developing a neural network for a natural language processing (NLP) problem. The networks discussed are Convolution Neural Networks (CNN), Long Short-Term Memory (LSTM), and CNNs and Bi-directional LSTMs (C-BiLSTM)
+
+Keskikohta kuvaa prosessia
+
+Yhteenveto conclusioneist
 
 ## Introduction
 
-The goal of this project is to attempt to solve a toxicity classification problem in the field of natural language processing (NLP). The approach used in this paper discusses neural networks and how they perform for this classification task. We discuss our reasoning, expectations and thoughts of the execution of our project. The toxicity classification problem at hand is due to the increasing amount of discussion platforms such as, comment feeds on live broadcasts and other fora. Some live broadcasts are targeted for wide audiences and need efficient, near instantanious, profanity filtering.
+The goal of this project is to attempt to solve a toxicity classification problem in the field of NLP. The approach used in this paper discusses neural networks and how they perform for this classification task. We discuss our reasoning, expectations and thoughts of the execution of our project. The toxicity classification problem at hand is due to the increasing amount of discussion platforms such as, comment feeds on live broadcasts and other fora. Some live broadcasts are targeted for wide audiences and need efficient, near instantanious, profanity filtering.
 
 Typically, the issue with naïve profanity filtering is that it focuses too heavily on individual words while ignoring the context. It was studied that names of the frequently attacked identities were automatically accociated to toxicity by machine learning (ML) models, even if the individual(s) themselves, or the context, were not offensive. (Kaggle. 2019)
 
@@ -62,7 +72,7 @@ where:
 
 None of this is relevant until we have inspected and manipulated the data by different methods (e.g. converting that's -> that is). After analyzing the data, we hope to get some instincts on how to construct the networks. After the data manipulation is done, we will feed it to a neural network hoping for results. That is, the scores of the AUCs above.
 
-Our initial plan is to use Convolution Neural Networks (CNNs) because they have been shown effective for various NLP problems. In addition to CNNs, we will implement a Long Short-Term Memory (LSTM) Recurrent Neural Network (RNN) or a Gated Recurrent Unit (GRU) network (another variation of RNN), and compare those results to the results obtained by CNNs.
+Our initial plan is to use CNNs because they have been shown effective for various NLP problems. In addition to CNNs, we will implement a LSTM Recurrent Neural Network (RNN) or a Gated Recurrent Unit (GRU) network (another variation of RNN), and compare those results to the results obtained by CNNs.
 
 ## Analysing the datasets
 
@@ -299,7 +309,7 @@ Typically the text classification pipeline contains the following components:
 - Algorithm: A machine learning algorithm that is used to classify the inputs
 - Model: The result of the training, this will perform the label predictions (Maheshwari, 2018)
 
-Some studies suggest to utilize a combination of CNNs and Bi-directional LSTMs (C-BiLSTM) to achieve a high performing classifier for a test very similar to ours (Yenala et al., 2014).
+Some studies suggest to utilize a combination of C-BiLSTM to achieve a high performing classifier for a test very similar to ours (Yenala et al., 2014).
 
 More generally, use of RNNs, LSTM being an example of these, in NLP is an intuitive and an advisable method. RNNs exceed in grammar learning. This is mainly because their ability to process sequences of inputs, such as, in the case of toxicity filtering, sequences of words.
 
@@ -333,13 +343,48 @@ CNNs are feed-forward artificial neural networks. They use a variation of multil
 
 Harrison Jansma recommends in his Medium article not to use Dropout (Harrison, 2018). Dropout is a technique for preventing overfitting in neural networks by randomly dropping units (and their connections) from neural network during training (Srivastana et al., 2014.). According to Jansma, there are two main reasons why use of dropout is declining in CNNs. First, use of dropout is less effective in regularizing convolutional layers in contrast to batch normalization. Secondly, dropout is good for fully connected layers but more recent architectures have moved away from these fully-connected blocks. Hence, it is not the tool for these architectures.
 
+```python
+class LSTMNetwork(nn.Module):
+    def __init__(self, max_len, vocab_size, hidden_size, out_size):
+        super(LSTMNetwork, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, max_len)
+
+        self.conv = nn.Sequential(
+            nn.Conv1d(max_len, hidden_size, 3, padding = 1),
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(),
+            nn.Conv1d(hidden_size, hidden_size, 3, padding = 1),
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(),
+            nn.Conv1d(hidden_size, hidden_size, 3, padding = 1),
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(),
+        )
+
+        in_size = get_conv_out_size(max_len, 3, 1, 1)
+        in_size = get_conv_out_size(in_size, 3, 1, 1)
+        in_size = get_conv_out_size(in_size, 3, 1, 1)
+
+        self.net = nn.Sequential(
+            nn.Linear(in_size, hidden_size * 2),
+            nn.ELU(),
+            nn.Linear(hidden_size * 2, out_size)
+        )
+
+    def forward(self, x):
+        embedding = self.embedding(x)
+        out = self.conv(embedding)
+
+        out = torch.mean(out, 1) # global average pooling
+
+        return self.net(out)
+```
+
 ### Long short-term memory (LSTM)
 
 LSTM is a recurrent network architecture in conjunction with an efficient, gradient-based learning algorithm. All together LSTM is able to store information over extended time intervals while resolving problems associated with backpropagation through time (BPTT) and real-time recurrent learning (RTRL). (Hochreiter and Schmidhuber, 1995)
 
 The greatest advantage of using LSTM for NLP is its ability to handle noise, distributed representations, and continuous values. LSTMs ability to function without a finite number of states enables it to work for any sequence lengths and items in the sequence, as long as these are preprocessed to numbers. (Hochreiter and Schmidhuber, 1995)
-
-#### The network
 
 Our LSTM network consists of embedding and linear layers along with the LSTM defined by PyTorch. The PyTorch LSTM applies a multi-layer long short-term memory RNN to the input sequence. The computation, that the layer does, for each input sequence is:
 
@@ -401,6 +446,9 @@ class LSTMNetwork(nn.Module):
 max_len = len(sentences.max())
 
 lstm = LSTMNetwork(max_len, len(tokenizer.word_index) + 1, 128, len(train_y.columns)).to(device)
+# Criterion combines BCELoss and sigmoid layer, more numerically stable
+# than embedding sigmoid directly into the network
+# as torch takes advantage of the log-sum-exp trick for numerical stability.
 criterion = nn.BCEWithLogitsLoss(reduction="mean")
 optimizer = optim.Adam(lstm.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: .7 ** epoch)
@@ -416,7 +464,7 @@ class CNNLSTMNetwork(nn.Module):
         super(LSTMNetwork, self).__init__()
         self.embedding = nn.Embedding(vocab_size, max_len)
 
-        self.conv = nn.Sequential( # [1024, 175, 175]
+        self.conv = nn.Sequential(
             nn.Conv1d(max_len, hidden_size, 3, padding = 1),
             nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
@@ -461,15 +509,17 @@ Below are the results of the use of the above networks with tweaked parameters a
 | ReLU          | 0.89617 | .5             | .25     | 128         | 2           |
 | ReLU          | 0.90599 | .7             | .25     | 128         | 4           |
 
+Unlike originally intended, we did not use GRU network at all. This was due to the time limitations set to the project.
+
 ## Conclusions
 
 In retrospect, we could have tried splitting a chunk of the training data to be used as validation data to train the models. In addition to the need of manually adjusting the learning rate to counter overfitting, this approach would have saved us from futile submission attempts as the competition limited submissions per day to five.
 
-The decisions we made were good, and the results we gained were not awful, but it would have been nice to have had time to try `Adam` optimizer with different configuration parameters. In addition to this, exploring with a different optimizer would have been nice.
+The decisions we made were good, and the results we gained were not awful, but it would have been nice to have had time to try `Adam` optimizer with different configuration parameters. In addition to this, exploring with a different optimizer would have been nice. Use of premade embedding, such as GloVe, which is an embedding of Wikipedia 2014 and Gigaword word libraries, could have made a large difference in contrast to our own embedding. This is because GloVe embedding is made so that the words take into consideration relations with each other and the other context. (Pennington J. et al. 2014)
 
 We also had some issues with computational resources, as we hit memory caps quite fast. We resolved this issue by adjusting the network structure and splitting the test data into chunks before feeding it to the network to obtain labels for the test data.
 
-Originally, we thought of using the `parent_id` attribute, but in the end we decided against it, due to time issues. Also, the data contained metadata from Civil Comments: such as `funny`, `sad`, `likes` and `dislikes`. These subtypes were not utilized in any way, but further research could benefit from these greatly.
+Originally, we thought of using the `parent_id` attribute, but in the end we decided against it, due to pressure of time. Also, the data contained metadata from Civil Comments: such as `funny`, `sad`, `likes` and `dislikes`. These subtypes were not utilized in any way, but further research could benefit from these greatly.
 
 ## References
 
@@ -482,9 +532,9 @@ Hochreiter, S. and Schmidhuber, J. 1995. Long short term memory. München: Inst
 
 Kalchbrenner, N., Grefenstette, E., Blunsom, P., 2014. A Convolutional Neural Network for Modelling Sentences, In Proceedings of ACL 2014.
 
-Keras. 2018. Text Processing - Keras Documentation. Retrievew from https://keras.io/preprocessing/text/.
+Keras. 2018. Text Processing - Keras Documentation. Retrieved from https://keras.io/preprocessing/text/.
 
-Maheshwari, A., 2018. Report on Text Classification using CNN, RNN & HAN. Retrievew from https://medium.com/jatana/report-on-text-classification-using-cnn-rnn-han-f0e887214d5f/.
+Maheshwari, A., 2018. Report on Text Classification using CNN, RNN & HAN. Retrieved from https://medium.com/jatana/report-on-text-classification-using-cnn-rnn-han-f0e887214d5f/.
 
 Shen, Y., He, X., Gao, J., Deng, L., Mesnil, G. 2014. 2014. Learning Semantic Representations Using Convolutional Neural Networks for Web Search. In Proceedings of WWW 2014.
 
@@ -492,9 +542,11 @@ Srivastava, N., Hinton, G., Krizhevsky, A., Sutskever, I., Salakhutdinov, R., 20
 
 Torch Contributors. 2018. PyTorch Documentation. Retrieved from https://pytorch.org/docs/stable/index.html/.
 
-Yenala, H., Jhanwar, A., Chinnakotla, M.K. et al. Int J Data Sci Anal (2018) 6: 273. [](https://doi.org/10.1007/s41060-017-0088-4)
+Yenala, H., Jhanwar, A., Chinnakotla, M.K. et al. Int J Data Sci Anal (2018) 6: 273. Retrieved from https://doi.org/10.1007/s41060-017-0088-4
 
 Yih, W., He, X., Meek, C. 2014. Semantic Parsing for Single-Relation Question Answerings of ACL 2014.
+
+Pennington, J., Socher, R., D. Manning. C. D. 2014. GloVe: Global Vectors for Word Representation.
 
 ## Appendix
 
@@ -620,6 +672,9 @@ def get_individual_words(col):
     col.str.split().apply(words.update)
 
     return words, len(words)
+
+def get_conv_out_size(in_size, kernel_size, stride, padding, dilation = 1):
+  return (in_size + 2 * padding - dilation * (kernel_size - 1) - 1) // stride + 1
 ```
 
 ### E. Visualization functions
@@ -762,7 +817,7 @@ for i in range(chunks):
         predictions,
         pd.DataFrame({
             "id": test_data["id"][first:last],
-            "prediction": torch.sigmoid(
+            "prediction": torch.sigmoid( # need to take sigmoid, as the training applies BCEWithLogitsLoss
                 lstm(test_data_tensor).detach().cpu() # need to copy the memory to cpu before casting to numpy array
             )[:, 0]
         })
