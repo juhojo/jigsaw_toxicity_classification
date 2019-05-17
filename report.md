@@ -22,7 +22,7 @@
 
 ## Abstract
 
-TODO
+
 
 ## Introduction
 
@@ -31,6 +31,8 @@ The goal of this project is to attempt to solve a toxicity classification proble
 Typically, the issue with naïve profanity filtering is that it focuses too heavily on individual words while ignoring the context. It was studied that names of the frequently attacked identities were automatically accociated to toxicity by machine learning (ML) models, even if the individual(s) themselves, or the context, were not offensive. (Kaggle. 2019)
 
 To reach the goal of the project, a proper classifier, we have divided the workload into three sections: Analyzation and manipulation of the datasets, design and construction of the networks, and reporting of the attained results. At the beginning we will do appropriate research to design the network. However, some parts of the network will be designed on the go, through trial and error.
+
+In the appendices, you can find code blocks that are not directly related to the structure of the neural networks. These include; import statements, spelling replacement and relevant columns dictionaries, visualization and utility functions, the training algorithm we used for all of our network variants, and lastly algorithm for obtaining the results.
 
 ### Scope of the project
 
@@ -101,7 +103,7 @@ The data is a little noisy. Example given, there are some reoccurring special ch
 
 The operations we do for the datasets are; lowercase the words, remove the non-alpha characters, uniform spelling, fill empty values with 0 and preprocess the data so that we obtain a much smaller, more compact, sets for the training and validation.
 
-```{python}
+```python
 def clean_sentence(sentence):
     return re.sub(
         "[^a-z\d\s]", # Remove all non-alphanumeric or space characters from comment text
@@ -166,7 +168,7 @@ def read_cleaned_file(from_name, to_name, cols = None, drop_duplicates = True):
     return  pd.read_csv("./{}.csv".format(to_name))
 ```
 
-```{python}
+```python
 print("reading train data...")
 train_data = read_cleaned_file(
     'train',
@@ -191,7 +193,7 @@ In this section we will attempt to find further details of the data with some ba
 
 Now that we have a cleaned version of the datasets we can further analyze and visualize them. Lets first look at the binary distribution of toxic and non-toxic inputs in the dataset. A message is toxic whenever its toxicity (attribute `target`) is larger than the data toxicity threshold (`.5`).
 
-```{python}
+```python
 def calculate_binary_distribution(data):
     # Calculate percentage of toxic and non-toxic entries
     toxic = 0
@@ -205,7 +207,7 @@ def calculate_binary_distribution(data):
     return (toxic / data_count, non_toxic / data_count)
 ```
 
-```{python}
+```python
 count_toxic, count_non_toxic = calculate_binary_distribution(train_data)
 
 # Print binary toxicity distribution
@@ -219,7 +221,7 @@ As we can see, most of the sentences are non-toxic. It might then be possible to
 
 Next, a generic visualization showing the distribution of toxic and non-toxic messages in the dataset.
 
-```{python}
+```python
 visualize_target_distribution(train_data)
 ```
 
@@ -227,17 +229,17 @@ visualize_target_distribution(train_data)
 
 Then toxicity distributions by identity groups.
 
-```{python}
+```python
 visualize_toxicity_by_identity(train_data, identity_columns)
 ```
 
 ![Toxicity by identity](./img/comment-summary-identity.png)
 
-```{python}
+Below is an example presenting some very toxic comments with Jewish identity (reader discretion adviced).
+
+```python
 train_data.sort_values(by=["target", "jewish"], ascending=False).head(10)
 ```
-
-![Toxicity by identity](./img/comment-length.png)
 
 |id|comment_text|
 |---|---|
@@ -252,7 +254,7 @@ train_data.sort_values(by=["target", "jewish"], ascending=False).head(10)
 |1683859|yeah  socialists want to exterminate jews  like that jewish guy bernie wants to do  i would say the level of ignorance and lack of education is comical  except it is so detrimental to our country  read a book sometime |
 |297088|cannot wait for his next meltdown when someone does his genealogy and he finds out his grandma is jewish and his great granddad is black |
 
-```{python}
+```python
 def count_more_than_equal(data, attr, threshold):
     try:
         threshold = float(threshold)
@@ -267,7 +269,7 @@ def count_more_than_equal(data, attr, threshold):
         return 0
 ```
 
-```{python}
+```python
 threshold = 1250
 print("Amount of {} or more character sentences.\ntrain data: {}\ntest data: {}".format(
     threshold,
@@ -276,10 +278,12 @@ print("Amount of {} or more character sentences.\ntrain data: {}\ntest data: {}"
 ))
 ```
 
-```{python}
+```python
 visualize_comment_length(train_data, "Comment text lengths for train data")
 visualize_comment_length(test_data, "Comment text lengths for test data")
 ```
+
+![Comment length](./img/comment-length.png)
 
 As we can see from the illustrations above, the two datasets have very similar shape and the model should hence yield good results for both the training and the test dataset.
 
@@ -299,13 +303,21 @@ Some studies suggest to utilize a combination of CNNs and Bi-directional LSTMs (
 
 More generally, use of RNNs, LSTM being an example of these, in NLP is an intuitive and an advisable method. RNNs exceed in grammar learning. This is mainly because their ability to process sequences of inputs, such as, in the case of toxicity filtering, sequences of words.
 
+To ensure the reproducibality of the results, we initially seed torch, numpy and python with 0.
+
+```python
+random.seed(0)
+np.random.seed(0)
+torch.manual_seed(0)
+```
+
 ### Preprocess the data
 
 Before feeding the comment contents to the model, we want to perform integer encoding of its contents. We do this by using tokenizer provided by `Keras` -library. The tokenizer transforms text content into sequence of integers. Doing this allows us to later on implement an embedding layer that we need for processing text data. (Keras Documentation, 2018)
 
 The purpose of the word embedding is to obtain a dense vector representation of each word. This vector is then capable of, example given, capturing the context of that word, the semantic and syntactic similarity and relation to other words (Ganguly et al., 2015).
 
-```{python}
+```python
 train_x = train_data["comment_text"]
 train_y = train_data[["target"] + identity_columns]
 
@@ -345,8 +357,7 @@ $h_t = o_t * \tanh(c_t)$
 
 where $h_t$ is the hidden state at time $t$, $c_t$ is the cell state at time $t$, $x_t$ is the input time at $t$, $h_{(t-1)}$ is the hidden state of the layer at time $t-1$ or the initial hidden state at time $o$, and $i_t$, $f_t$, $g_t$ and $o_t$ are the input, forget, cell, and output gates, respectively. $\sigma$ is the sigmoid function, and $*$ is the Hadamard product. (PyTorch Documentation, 2019)
 
-```{python}
-
+```python
 class LSTMNetwork(nn.Module):
     def __init__(self, max_len, vocab_size, hidden_size, out_size):
         super(LSTMNetwork, self).__init__()
@@ -386,7 +397,7 @@ class LSTMNetwork(nn.Module):
         return self.net(out)
 ```
 
-```{python}
+```python
 max_len = len(sentences.max())
 
 lstm = LSTMNetwork(max_len, len(tokenizer.word_index) + 1, 128, len(train_y.columns)).to(device)
@@ -395,97 +406,11 @@ optimizer = optim.Adam(lstm.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: .7 ** epoch)
 ```
 
-```{python}
-log_nth = 200
-epochs = 4
-
-print("training model...")
-
-train_tokens = preprocessing.sequence.pad_sequences(
-    tokenizer.texts_to_sequences(train_x),
-    maxlen = max_len,
-)
-
-train_data_tensor = torch.tensor(train_tokens, dtype=torch.long).to(device)
-train_labels_tensor = torch.tensor(train_y.values, dtype=torch.float32).to(device)
-
-train_loader = torch.utils.data.DataLoader(
-    torch.utils.data.TensorDataset(train_data_tensor, train_labels_tensor),
-    batch_size=512,
-    shuffle=True
-)
-
-for epoch in range(epochs):
-    epoch_start = time.time()
-    scheduler.step()
-    lstm.train() # set lstm to train mode
-    total_loss = 0
-    for i, (x, labels) in enumerate(train_loader, 1):
-        x.to(device)
-
-        optimizer.zero_grad()
-
-        out = lstm(x)
-
-        loss = criterion(out, labels)
-        total_loss += loss.item()
-        loss.backward()
-
-        optimizer.step()
-
-        if i % log_nth == 0:
-            print(total_loss / i, "{} / {} (batches ran / left to run)".format(i, len(train_loader)))
-
-    print(
-        "epoch: {}/{}".format(epoch + 1, epochs),
-        "loss: {:.4f}".format(total_loss / len(train_loader)),
-        "time passed: {}".format(time.time() - epoch_start)
-    )
-
-# Save trained model state in case something goes south
-print("saving model...")
-torch.save(lstm.state_dict(), "./lstm.pd")
-```
-
-```{python}
-lstm.eval() # set lstm to evaluation mode
-
-test_tokens = preprocessing.sequence.pad_sequences(
-    tokenizer.texts_to_sequences(test_data["comment_text"]),
-    maxlen = max_len,
-)
-
-chunk_size = 1000
-chunks = len(test_tokens) // chunk_size + 1
-
-predictions = pd.DataFrame(columns=["id", "comment", "prediction"])
-
-for i in range(chunks):
-    print("{}/{}".format(i + 1, chunks))
-    first, last = i * chunk_size, min(len(test_tokens), (i + 1) * chunk_size)
-
-    test_data_tensor = torch.tensor(test_tokens, dtype=torch.long)[first:last].to(device)
-
-    predictions = pd.concat([
-        predictions,
-        pd.DataFrame({
-            "id": test_data["id"][first:last],
-            "prediction": torch.sigmoid(
-                lstm(test_data_tensor).detach().cpu() # need to copy the memory to cpu before casting to numpy array
-            )[:, 0]
-        })
-    ], sort=False)
-
-assert len(predictions) == len(test_tokens)
-predictions[["id", "prediction"]] \
-    .to_csv("./submission.csv", index=False)
-```
-
 ### Convolutional Bi-Directional LSTM (C-BiLSTM)
 
 A combination network of Convolutional Neural Network and Bi-Directional LSTM.
 
-```{python}
+```python
 class CNNLSTMNetwork(nn.Module):
     def __init__(self, max_len, vocab_size, hidden_size, out_size):
         super(LSTMNetwork, self).__init__()
@@ -542,6 +467,8 @@ In retrospect, we could have tried splitting a chunk of the training data to be 
 
 The decisions we made were good, and the results we gained were not awful, but it would have been nice to have had time to try `Adam` optimizer with different configuration parameters. In addition to this, exploring with a different optimizer would have been nice.
 
+We also had some issues with computational resources, as we hit memory caps quite fast. We resolved this issue by adjusting the network structure and splitting the test data into chunks before feeding it to the network to obtain labels for the test data.
+
 Originally, we thought of using the `parent_id` attribute, but in the end we decided against it, due to time issues. Also, the data contained metadata from Civil Comments: such as `funny`, `sad`, `likes` and `dislikes`. These subtypes were not utilized in any way, but further research could benefit from these greatly.
 
 ## References
@@ -573,7 +500,7 @@ Yih, W., He, X., Meek, C. 2014. Semantic Parsing for Single-Relation Question An
 
 ## A. Imports
 
-```{python}
+```python
 import numpy as np # linear algebra
 import pandas as pd # data processing, CSV file I/O
 import re # regexes
@@ -590,16 +517,13 @@ import torch.optim as optim
 
 import os
 
-device = torch.device("cpu")
-
-np.random.seed(int(time.time()))
-torch.manual_seed(int(time.time()))
+device = torch.device("cuda:0")
 torch.backends.cudnn.deterministic = True
 ```
 
 ### B. Columns
 
-```{python}
+```python
 identity_columns = [
     "male",
     "female",
@@ -621,7 +545,7 @@ relevant_columns = [
 
 ### C. Spelling replacements
 
-```{python}
+```python
 replace_spelling = {
     "I'd": "I would",
     "I'll": "I will",
@@ -685,4 +609,166 @@ replace_spelling = {
     "you're": "you are",
     "you've": "you have"
 }
+```
+
+### D. Utility functions
+
+```python
+def get_individual_words(col):
+    assert hasattr(col, "str") and hasattr(col.str, "split")
+    words = set()
+    col.str.split().apply(words.update)
+
+    return words, len(words)
+```
+
+### E. Visualization functions
+
+```python
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+import numpy as np
+
+
+def visualize_toxicity_by_identity(data, columns):
+    """Visualizes the toxicity for each identity type"""
+    data.groupby(data["target"] >= .5).mean()[columns].T \
+        .plot.barh()
+
+    plt.legend(title="Is toxic")
+
+    plt.tight_layout()
+    plt.title("Comment summary – targeted identity")
+    plt.show()
+
+
+def visualize_target_distribution(data, bins = 10):
+    """
+    Visualizes the target distribution
+    - A comment is considered non-toxic if target is less than .1
+    - Comments between .1 to .5 are considered toxic to some annotators
+    - Comments above .5 are toxic.
+    """
+    plot = data["target"].plot(kind="hist", bins=bins)
+
+    ax = plot.axes
+
+    for p in ax.patches:
+        ax.annotate(
+            f'{p.get_height() * 100 / data.shape[0]:.2f}%',
+            (p.get_x() + p.get_width() / 2., p.get_height()),
+            ha="center",
+            va="center",
+            fontsize=8,
+            color="black",
+            xytext=(0,7),
+            textcoords="offset points"
+        )
+
+    plt.title("Target distribution")
+    plt.show()
+
+
+def visualize_comment_length(data, title):
+    """Visualizes the comment length distribution"""
+    data["comment_text_len"] = data["comment_text"].apply(len)
+    ax = sns.distplot(
+        data["comment_text_len"],
+        bins=150
+    )
+    ax.set(xlabel="length", ylabel="count")
+
+    plt.title(title)
+    plt.show()
+```
+
+### F. Training
+
+```python
+log_nth = 200
+epochs = 4
+
+print("training model...")
+
+train_tokens = preprocessing.sequence.pad_sequences(
+    tokenizer.texts_to_sequences(train_x),
+    maxlen = max_len,
+)
+
+train_data_tensor = torch.tensor(train_tokens, dtype=torch.long).to(device)
+train_labels_tensor = torch.tensor(train_y.values, dtype=torch.float32).to(device)
+
+train_loader = torch.utils.data.DataLoader(
+    torch.utils.data.TensorDataset(train_data_tensor, train_labels_tensor),
+    batch_size=512,
+    shuffle=True
+)
+
+for epoch in range(epochs):
+    epoch_start = time.time()
+    scheduler.step()
+    lstm.train() # set lstm to train mode
+    total_loss = 0
+    for i, (x, labels) in enumerate(train_loader, 1):
+        x.to(device)
+
+        optimizer.zero_grad()
+
+        out = lstm(x)
+
+        loss = criterion(out, labels)
+        total_loss += loss.item()
+        loss.backward()
+
+        optimizer.step()
+
+        if i % log_nth == 0:
+            print(total_loss / i, "{} / {} (batches ran / left to run)".format(i, len(train_loader)))
+
+    print(
+        "epoch: {}/{}".format(epoch + 1, epochs),
+        "loss: {:.4f}".format(total_loss / len(train_loader)),
+        "time passed: {}".format(time.time() - epoch_start)
+    )
+
+# Save trained model state in case something goes south
+print("saving model...")
+torch.save(lstm.state_dict(), "./lstm.pd")
+```
+
+### G. Obtaining results
+
+```python
+lstm.eval() # set lstm to evaluation mode
+
+test_tokens = preprocessing.sequence.pad_sequences(
+    tokenizer.texts_to_sequences(test_data["comment_text"]),
+    maxlen = max_len,
+)
+
+chunk_size = 1000 # too big chunk won't fit in memory, we hit our limit (locally) at 2000
+chunks = len(test_tokens) // chunk_size + 1
+
+predictions = pd.DataFrame(columns=["id", "comment", "prediction"])
+
+for i in range(chunks):
+    print("{}/{}".format(i + 1, chunks))
+    first, last = i * chunk_size, min(len(test_tokens), (i + 1) * chunk_size)
+
+    test_data_tensor = torch.tensor(test_tokens, dtype=torch.long)[first:last].to(device)
+
+    predictions = pd.concat([
+        predictions,
+        pd.DataFrame({
+            "id": test_data["id"][first:last],
+            "prediction": torch.sigmoid(
+                lstm(test_data_tensor).detach().cpu() # need to copy the memory to cpu before casting to numpy array
+            )[:, 0]
+        })
+    ], sort=False)
+
+assert len(predictions) == len(test_tokens)
+predictions[["id", "prediction"]] \
+    .to_csv("./submission.csv", index=False)
 ```
