@@ -134,10 +134,10 @@ def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
             "previous_word_count": [original_word_count],
             "cleaned_word_count": [get_individual_words(data["comment_text"])[1]],
             "previous_row_count": [len(data)],
-            "cleaned_row_count": [data['comment_text'].nunique()]
+            "cleaned_row_count": [data["comment_text"].nunique()]
         }).to_csv("./"+to_name+"_summary.csv")
 
-        data = data.groupby('comment_text').mean().reset_index()
+        data = data.groupby("comment_text").mean().reset_index()
     data.to_csv("./"+to_name+".csv", index_label="id")
 
 def print_cleanup_summary(filename):
@@ -160,7 +160,7 @@ def print_cleanup_summary(filename):
     ))
 
 def read_cleaned_file(from_name, to_name, cols = None, drop_duplicates = True):
-    if True or not os.path.isfile("./{}.csv".format(to_name)):
+    if not os.path.isfile("./{}.csv".format(to_name)):
         create_cleaned_file(from_name, to_name, cols, drop_duplicates)
     # read data from cleaned data file if not already set
     return  pd.read_csv("./{}.csv".format(to_name))
@@ -193,7 +193,7 @@ Now that we have a cleaned version of the datasets we can further analyze and vi
 
 ```{python}
 def calculate_binary_distribution(data):
-    """Calculate percentage of toxic and non-toxic entries"""
+    # Calculate percentage of toxic and non-toxic entries
     toxic = 0
     non_toxic = 0
     for value in data["target"]:
@@ -223,17 +223,34 @@ Next, a generic visualization showing the distribution of toxic and non-toxic me
 visualize_target_distribution(train_data)
 ```
 
+![Target distribution](./img/binary-distribution.png)
+
 Then toxicity distributions by identity groups.
 
 ```{python}
 visualize_toxicity_by_identity(train_data, identity_columns)
 ```
 
+![Toxicity by identity](./img/comment-summary-identity.png)
+
 ```{python}
 train_data.sort_values(by=["target", "jewish"], ascending=False).head(10)
 ```
 
-Here, we see the comment lengths (number of characters in a sentence) for the train and validation datasets. The distribution is bimodal but heavily skewed to shorter lengths. The two peaks are at approximately `100` and `1000` character marks. There are only a total of four (`4`) items in the training dataset with more-than or equal to `1250` characters in the datasets. The corresponding number for the test dataset is three (`3`).
+![Toxicity by identity](./img/comment-length.png)
+
+|id|comment_text|
+|---|---|
+|23550| a  misleading technicality   b  put aside afrikaner for a moment and consider the broader point   c   i  such heavily concentrated wealth at the top indicates economic disease   ii  their race indicates a persistent racial problem   1  you are defending the bantu education system    2  i am not black  i am white monopoly capital  you would think afrikaners would do better out of apartheid than 3 in the top 16   perhaps they were too busy blaming the english for their lack of will power     or the jews    or the arabs    or is that ignorant and racist |
+|542152|how many jewish majority countries are there in the world  one  with a total population of barely 10 million  and that country is a constitutional democracy  with full rights and freedoms for all its people  including those who are not jewish  sorry  your analogy is ridiculous |
+|553967|hysterical over reaction exactly describes the targeted liberal islamophobia motion rather than encompassing all religions        this just after imams in canada were discovered targeting their hatred and calls to kill jews |
+|796138|it is incomprehensible that anyone  other than residences of israel  can make an intelligent and informed comment on the jewish state  of course it is not a democracy any more than any other arab state in the region and rightfully so  it has provided all residence considerable freedoms and vastly more  rights  than iran  saudi arabia and palestine to name a few  the notion of  trampling on anyones human rights  is nothing but an ironic joke given the attributes of the enemy states trying to destroy israel and if gaza was not a warning for you  i am not sure you are paying attention  john kerry is the progressives buffoon leading a band of useful idiots on the road to destroy israel |
+|963101|news flash bacon is not kosher  jews and their muslims brothers do not eat pork |
+|1049861|one could effectively argue that islamic state  with it is ideology surrounding women  jews  gays  and the separation of religion and state is far right movement  but it might be simpler to stop all the hair splitting and take action against those inciting violence and hatred from any ideological basis  when people want to continually bang on about one particular hate group and never mention or rationalize the actions of another you can often hear a little axe grinding in the background |
+|1282557|that is silly  very little of modern life  which is regulated by the constitution was directly addressed by that document  what you are claiming is that religion takes precedence over any other consideration  sort of a christian sharia  amirite  so if jews are considered as christ killers  is it o k  to discriminate against them  if a muslim decides to discriminate against women  it that o k  |
+|1399307|there are about 100 verses in the quran  the holy book of the religion of islam  that call for the destruction of jews  christians and non believers  infidels   there are dozens of groups of muslims  including hamas  hezbollah  islamic jihad  the taliban  al qaeda  al shabaab  boko haram  abu sayyaf  daesh  isis il   etc  etc  etc   that follow islam and the many verses in the quran that call for the destruction of jews  christians and non believers  i hope wente and the muslims in canada think muslims who follow the violent verses in the quran have no place in canada |
+|1683859|yeah  socialists want to exterminate jews  like that jewish guy bernie wants to do  i would say the level of ignorance and lack of education is comical  except it is so detrimental to our country  read a book sometime |
+|297088|cannot wait for his next meltdown when someone does his genealogy and he finds out his grandma is jewish and his great granddad is black |
 
 ```{python}
 def count_more_than_equal(data, attr, threshold):
@@ -284,9 +301,9 @@ More generally, use of RNNs, LSTM being an example of these, in NLP is an intuit
 
 ### Preprocess the data
 
-Before feeding the comment contents to the model, we want to perform integer encoding of its contents. We do this by using tokenizer provided by `Keras` -library. The tokenizer transforms text content into sequence of integers. Doing this allows us to later on implement an embedding layer that we need for processing text data.
+Before feeding the comment contents to the model, we want to perform integer encoding of its contents. We do this by using tokenizer provided by `Keras` -library. The tokenizer transforms text content into sequence of integers. Doing this allows us to later on implement an embedding layer that we need for processing text data. (Keras Documentation, 2018)
 
-The purpose of the word embedding is to obtain a dense vector representation of each word. This vector is then capable of, example given, capturing the context of that word, the semantic and syntactic similarity and relation to other words [A Word Embedding based Generalized Language Model for Informal Retrieval pp.795].
+The purpose of the word embedding is to obtain a dense vector representation of each word. This vector is then capable of, example given, capturing the context of that word, the semantic and syntactic similarity and relation to other words (Ganguly et al., 2015).
 
 ```{python}
 train_x = train_data["comment_text"]
@@ -300,15 +317,15 @@ tokenizer.fit_on_texts(sentences)
 
 ### Convolutional Neural Network (CNN)
 
-CNNs are feed-forward artificial neural networks. They use a variation of multilayer perceptrons that offer minimal preprocessing. Use of CNNs in NLP is a relatively new technique as previously their primary use case was in computer vision. Use of CNN models for NLP tasks have shown to be effective in semantic parsing **[Yih et al., 2014. Semantic Parsing for Single-Relation Question Answerings of ACL 2014]**, search query retrieval **[Shen et al., 2014. Learning Semantic Representations Using Convolutional Neural Networks for Web Search. In Proceedings of WWW 2014.]**, sentence modeling **[Kalchbrenner et al., 2014. A Convolutional Neural Network for Modelling Sentences, In Proceedings of ACL 2014.]**, and other, more traditional NLP tasks **[Collobert et al., 2011. Natural Language Processing (Almost) from Scratch. Journal of Machine Learning Research 12:2493-2537]**.
+CNNs are feed-forward artificial neural networks. They use a variation of multilayer perceptrons that offer minimal preprocessing. Use of CNNs in NLP is a relatively new technique as previously their primary use case was in computer vision. Use of CNN models for NLP tasks have shown to be effective in semantic parsing (Yih et al., 2014), search query retrieval (Shen et al., 2014), sentence modeling (Kalchbrenner et al., 2014), and other, more traditional NLP tasks (Collobert et al., 2011).
 
-Harrison Jansma recommends in his Medium article not to use Dropout **[Harrison J. 2018. Don't Use Dropout in Convolutional Networks. Medium.]**. Dropout is a technique for preventing overfitting in neural networks by randomly drop units (and their connections) from neural network during training **[Srivastana et al., 2014. Dropout: A Simple Way to Prevent Neural Networks from Overfitting. Journal of Machine Learning Research 15:1929-1958]**. According to Jansma, there are two main reasons why use of dropout is declining in CNNs. First, use of dropout is less effective in regularizing convolutional layers in contrast to batch normalization. Secondly, dropout is good for fully connected layers but more recent architectures have moved away from these fully-connected blocks. Hence, it is not the tool for these architectures.
+Harrison Jansma recommends in his Medium article not to use Dropout (Harrison, 2018). Dropout is a technique for preventing overfitting in neural networks by randomly dropping units (and their connections) from neural network during training (Srivastana et al., 2014.). According to Jansma, there are two main reasons why use of dropout is declining in CNNs. First, use of dropout is less effective in regularizing convolutional layers in contrast to batch normalization. Secondly, dropout is good for fully connected layers but more recent architectures have moved away from these fully-connected blocks. Hence, it is not the tool for these architectures.
 
 ### Long short-term memory (LSTM)
 
-LSTM is a recurrent network architecture in conjunction with an efficient, gradient-based learning algorithm. All together LSTM is able to store information over extended time intervals while resolving problems associated with backpropagation through time (BPTT) and real-time recurrent learning (RTRL). **(Hochreiter and Schmidhuber, 1995)[Hochreiter, S. and Schmidhuber, J. (1995). Long short term memory. München: Inst. für Informatik.]**
+LSTM is a recurrent network architecture in conjunction with an efficient, gradient-based learning algorithm. All together LSTM is able to store information over extended time intervals while resolving problems associated with backpropagation through time (BPTT) and real-time recurrent learning (RTRL). (Hochreiter and Schmidhuber, 1995)
 
-The greatest advantage of using LSTM for NLP is its ability to handle noise, distributed representations, and continuous values. LSTMs ability to function without a finite number of states enables it to hence work for any sequence lengths and items in the sequence, as long as these are preprocessed to numbers. **(Hochreiter and Schmidhuber, 1995)**
+The greatest advantage of using LSTM for NLP is its ability to handle noise, distributed representations, and continuous values. LSTMs ability to function without a finite number of states enables it to work for any sequence lengths and items in the sequence, as long as these are preprocessed to numbers. (Hochreiter and Schmidhuber, 1995)
 
 #### The network
 
@@ -326,7 +343,7 @@ $c_t = f_t * c_{(t-1)} + i_t * g_t$
 
 $h_t = o_t * \tanh(c_t)$
 
-where $h_t$ is the hidden state at time $t$, $c_t$ is the cell state at time $t$, $x_t$ is the input time at $t$, $h_{(t-1)}$ is the hidden state of the layer at time $t-1$ or the initial hidden state at time $o$, and $i_t$, $f_t$, $g_t$ and $o_t$ are the input, forget, cell, and output gates, respectively. $\sigma$ is the sigmoind function, and $*$ is the Hadamard product. **[PyTorch Documentation]**
+where $h_t$ is the hidden state at time $t$, $c_t$ is the cell state at time $t$, $x_t$ is the input time at $t$, $h_{(t-1)}$ is the hidden state of the layer at time $t-1$ or the initial hidden state at time $o$, and $i_t$, $f_t$, $g_t$ and $o_t$ are the input, forget, cell, and output gates, respectively. $\sigma$ is the sigmoid function, and $*$ is the Hadamard product. (PyTorch Documentation, 2019)
 
 ```{python}
 
@@ -469,12 +486,12 @@ predictions[["id", "prediction"]] \
 A combination network of Convolutional Neural Network and Bi-Directional LSTM.
 
 ```{python}
-class LSTMNetwork(nn.Module):
+class CNNLSTMNetwork(nn.Module):
     def __init__(self, max_len, vocab_size, hidden_size, out_size):
         super(LSTMNetwork, self).__init__()
         self.embedding = nn.Embedding(vocab_size, max_len)
 
-        self.conv = nn.Sequential( # [1024, 175, 175])
+        self.conv = nn.Sequential( # [1024, 175, 175]
             nn.Conv1d(max_len, hidden_size, 3, padding = 1),
             nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
@@ -511,23 +528,46 @@ class LSTMNetwork(nn.Module):
 
 ## Results
 
-We tried above networks with tweaking the parameters and network structures. However, due to limited time reserved to project and computational resources we were not able to try enough alterations.
+Below are the results of the use of the above networks with tweaked parameters and network structures. However, due to limited time reserved to project and computational resources, we were only able to try a handful of alterations.
 
 | activation fn | score   | lr coefficient | dropout | hidden size | lstm_layers |
-|---------------|---------|----------------|---------|-------------|-------------|
+| ------------- | ------- | -------------- | ------- | ----------- | ----------- |
 | ELU           | 0.91227 | .7             | .25     | 128         | 2           |
 | ReLU          | 0.89617 | .5             | .25     | 128         | 2           |
 | ReLU          | 0.90599 | .7             | .25     | 128         | 4           |
 
 ## Conclusions
 
+In retrospect, we could have tried splitting a chunk of the training data to be used as validation data to train the models. In addition to the need of manually adjusting the learning rate to counter overfitting, this approach would have saved us from futile submission attempts as the competition limited submissions per day to five.
+
+The decisions we made were good, and the results we gained were not awful, but it would have been nice to have had time to try `Adam` optimizer with different configuration parameters. In addition to this, exploring with a different optimizer would have been nice.
+
+Originally, we thought of using the `parent_id` attribute, but in the end we decided against it, due to time issues. Also, the data contained metadata from Civil Comments: such as `funny`, `sad`, `likes` and `dislikes`. These subtypes were not utilized in any way, but further research could benefit from these greatly.
+
 ## References
+
+Collobert, R., Weston, J., Bottou, L., Karlen, M., Kavukcuoglu, K., Kuksa, P., 2011. Natural Language Processing (Almost) from Scratch. Journal of Machine Learning Research 12:2493-2537.
+
+Ganguly, D., Roy, D., Mitra, M., Jones G. J. 2015. Word Embedding Based Generalized Language Model for Information Retrieval. In Proc. SIGIR 2015, pages 795–798.
+
+Harrison J. 2018. Don't Use Dropout in Convolutional Networks. Medium.
+Hochreiter, S. and Schmidhuber, J. 1995. Long short term memory. München: Inst. für Informatik.
+
+Kalchbrenner, N., Grefenstette, E., Blunsom, P., 2014. A Convolutional Neural Network for Modelling Sentences, In Proceedings of ACL 2014.
+
+Keras. 2018. Text Processing - Keras Documentation. Retrievew from https://keras.io/preprocessing/text/.
+
+Maheshwari, A., 2018. Report on Text Classification using CNN, RNN & HAN. Retrievew from https://medium.com/jatana/report-on-text-classification-using-cnn-rnn-han-f0e887214d5f/.
+
+Shen, Y., He, X., Gao, J., Deng, L., Mesnil, G. 2014. 2014. Learning Semantic Representations Using Convolutional Neural Networks for Web Search. In Proceedings of WWW 2014.
+
+Srivastava, N., Hinton, G., Krizhevsky, A., Sutskever, I., Salakhutdinov, R., 2014. Dropout: A Simple Way to Prevent Neural Networks from Overfitting. Journal of Machine Learning Research 15:1929-1958.
+
+Torch Contributors. 2018. PyTorch Documentation. Retrieved from https://pytorch.org/docs/stable/index.html/.
 
 Yenala, H., Jhanwar, A., Chinnakotla, M.K. et al. Int J Data Sci Anal (2018) 6: 273. [](https://doi.org/10.1007/s41060-017-0088-4)
 
-https://pytorch.org/tutorials/beginner/nlp/word_embeddings_tutorial.html
-Maheshwari (https://medium.com/jatana/report-on-text-classification-using-cnn-rnn-han-f0e887214d5f)
-Harish Yenala, Ashish Jhanwar, Manoj K. Chinnakotla and Jay Goyal (Deep learning for detecting inappropriate content in text)
+Yih, W., He, X., Meek, C. 2014. Semantic Parsing for Single-Relation Question Answerings of ACL 2014.
 
 ## Appendix
 
