@@ -11,7 +11,7 @@
     - [Preprocess the data](#preprocess-the-data)
     - [Convolutional Neural Network (CNN)](#convolutional-neural-network-cnn)
     - [Long short-term memory (LSTM)](#long-short-term-memory-lstm)
-    - [Convolutional Bi-Directional LSTM (C-BiLSTM)](#convolutional-bi-directional-lstm-c-bilstm)
+    - [Combination of CNN and LSTM](#combination-of-cnn-and-lstm)
   - [Results](#results)
   - [Conclusions](#conclusions)
   - [References](#references)
@@ -24,15 +24,17 @@
     - [F. Training](#f-training)
     - [G. Obtaining results](#g-obtaining-results)
 
+<div style="page-break-after: always;"></div>
+
 ## Abstract
 
-Yhteenveto Introductionista
+This paper describes the process of developing a neural network for a natural language processing (NLP) problem, a toxicity classification problem by Jigsaw.
 
-This paper describes the process of developing a neural network for a natural language processing (NLP) problem. The networks discussed are Convolution Neural Networks (CNN), Long Short-Term Memory (LSTM), and CNNs and Bi-directional LSTMs (C-BiLSTM)
+The networks discussed are Convolution Neural Networks (CNN), Long Short-Term Memory (LSTM), and a combination of CNNs and LSTMs (C-LSTM). Originally, we thought of implementing a Gated Recurrent Unit (GRU), but instead we decided to use a combination of CNNs and LSTMs.
 
-Keskikohta kuvaa prosessia
+In the end we achieved better results than we first anticipated considering the fact that we tried to minimize the number of external utilities. Our best model was achieved using Bi-directional LSTM, the accuracy of this model was `0.91510`.
 
-Yhteenveto conclusioneist
+<div style="page-break-after: always;"></div>
 
 ## Introduction
 
@@ -72,7 +74,9 @@ where:
 
 None of this is relevant until we have inspected and manipulated the data by different methods (e.g. converting that's -> that is). After analyzing the data, we hope to get some instincts on how to construct the networks. After the data manipulation is done, we will feed it to a neural network hoping for results. That is, the scores of the AUCs above.
 
-Our initial plan is to use CNNs because they have been shown effective for various NLP problems. In addition to CNNs, we will implement a LSTM Recurrent Neural Network (RNN) or a Gated Recurrent Unit (GRU) network (another variation of RNN), and compare those results to the results obtained by CNNs.
+Our initial plan is to use CNNs because they have been shown effective for various NLP problems. In addition to CNNs, we will implement a LSTM or a GRU network (another variation of RNN), and compare those results to the results obtained by CNNs.
+
+<div style="page-break-after: always;"></div>
 
 ## Analysing the datasets
 
@@ -265,30 +269,6 @@ train_data.sort_values(by=["target", "jewish"], ascending=False).head(10)
 |297088|cannot wait for his next meltdown when someone does his genealogy and he finds out his grandma is jewish and his great granddad is black |
 
 ```python
-def count_more_than_equal(data, attr, threshold):
-    try:
-        threshold = float(threshold)
-        count = 0
-        for value in data[attr]:
-            if isinstance(value, str):
-                value = len(value)
-            if value >= threshold:
-                count += 1
-        return count
-    except ValueError:
-        return 0
-```
-
-```python
-threshold = 1250
-print("Amount of {} or more character sentences.\ntrain data: {}\ntest data: {}".format(
-    threshold,
-    count_more_than_equal(train_data, "comment_text", threshold),
-    count_more_than_equal(test_data, "comment_text", threshold)
-))
-```
-
-```python
 visualize_comment_length(train_data, "Comment text lengths for train data")
 visualize_comment_length(test_data, "Comment text lengths for test data")
 ```
@@ -296,6 +276,8 @@ visualize_comment_length(test_data, "Comment text lengths for test data")
 ![Comment length](./img/comment-length.png)
 
 As we can see from the illustrations above, the two datasets have very similar shape and the model should hence yield good results for both the training and the test dataset.
+
+<div style="page-break-after: always;"></div>
 
 ## Methods
 
@@ -309,7 +291,7 @@ Typically the text classification pipeline contains the following components:
 - Algorithm: A machine learning algorithm that is used to classify the inputs
 - Model: The result of the training, this will perform the label predictions (Maheshwari, 2018)
 
-Some studies suggest to utilize a combination of C-BiLSTM to achieve a high performing classifier for a test very similar to ours (Yenala et al., 2014).
+Some studies suggest to utilize a combination of C-BiLSTM to achieve a high performing classifier for a test very similar to ours (Yenala et al., 2018).
 
 More generally, use of RNNs, LSTM being an example of these, in NLP is an intuitive and an advisable method. RNNs exceed in grammar learning. This is mainly because their ability to process sequences of inputs, such as, in the case of toxicity filtering, sequences of words.
 
@@ -344,7 +326,7 @@ CNNs are feed-forward artificial neural networks. They use a variation of multil
 Harrison Jansma recommends in his Medium article not to use Dropout (Harrison, 2018). Dropout is a technique for preventing overfitting in neural networks by randomly dropping units (and their connections) from neural network during training (Srivastana et al., 2014.). According to Jansma, there are two main reasons why use of dropout is declining in CNNs. First, use of dropout is less effective in regularizing convolutional layers in contrast to batch normalization. Secondly, dropout is good for fully connected layers but more recent architectures have moved away from these fully-connected blocks. Hence, it is not the tool for these architectures.
 
 ```python
-class LSTMNetwork(nn.Module):
+class CNNNetwork(nn.Module):
     def __init__(self, max_len, vocab_size, hidden_size, out_size):
         super(LSTMNetwork, self).__init__()
         self.embedding = nn.Embedding(vocab_size, max_len)
@@ -454,9 +436,9 @@ optimizer = optim.Adam(lstm.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: .7 ** epoch)
 ```
 
-### Convolutional Bi-Directional LSTM (C-BiLSTM)
+### Combination of CNN and LSTM
 
-A combination network of Convolutional Neural Network and Bi-Directional LSTM.
+A combination network of Convolutional Neural Network and LSTM. An award winning model, Convolutional Bi-directional LSTM (C-BiLSTM), encouraged us to try our own variant of the aforesaid model. The structure differs, but the basic idea is the same; combining strenths of the two architectures. The convolutional layer extracts the feature representations of each word, and the BLSTM layer captures various sequential patterns in the entire query and outputs a richer representation encoding of them (Yenala et al., 2018).
 
 ```python
 class CNNLSTMNetwork(nn.Module):
@@ -499,6 +481,8 @@ class CNNLSTMNetwork(nn.Module):
         return self.net(out)
 ```
 
+<div style="page-break-after: always;"></div>
+
 ## Results
 
 Below are the results of the use of the above networks with tweaked parameters and network structures. However, due to limited time reserved to project and computational resources, we were only able to try a handful of alterations.
@@ -511,6 +495,8 @@ Below are the results of the use of the above networks with tweaked parameters a
 
 Unlike originally intended, we did not use GRU network at all. This was due to the time limitations set to the project.
 
+<div style="page-break-after: always;"></div>
+
 ## Conclusions
 
 In retrospect, we could have tried splitting a chunk of the training data to be used as validation data to train the models. In addition to the need of manually adjusting the learning rate to counter overfitting, this approach would have saved us from futile submission attempts as the competition limited submissions per day to five.
@@ -520,6 +506,8 @@ The decisions we made were good, and the results we gained were not awful, but i
 We also had some issues with computational resources, as we hit memory caps quite fast. We resolved this issue by adjusting the network structure and splitting the test data into chunks before feeding it to the network to obtain labels for the test data.
 
 Originally, we thought of using the `parent_id` attribute, but in the end we decided against it, due to pressure of time. Also, the data contained metadata from Civil Comments: such as `funny`, `sad`, `likes` and `dislikes`. These subtypes were not utilized in any way, but further research could benefit from these greatly.
+
+<div style="page-break-after: always;"></div>
 
 ## References
 
@@ -548,7 +536,11 @@ Yih, W., He, X., Meek, C. 2014. Semantic Parsing for Single-Relation Question An
 
 Pennington, J., Socher, R., D. Manning. C. D. 2014. GloVe: Global Vectors for Word Representation.
 
+<div style="page-break-after: always;"></div>
+
 ## Appendix
+
+<div style="page-break-after: always;"></div>
 
 ## A. Imports
 
@@ -675,6 +667,26 @@ def get_individual_words(col):
 
 def get_conv_out_size(in_size, kernel_size, stride, padding, dilation = 1):
   return (in_size + 2 * padding - dilation * (kernel_size - 1) - 1) // stride + 1
+
+def count_more_than_equal(data, attr, threshold):
+    try:
+        threshold = float(threshold)
+        count = 0
+        for value in data[attr]:
+            if isinstance(value, str):
+                value = len(value)
+            if value >= threshold:
+                count += 1
+        return count
+    except ValueError:
+        return 0
+
+# threshold = 1250
+# print("Amount of {} or more character sentences.\ntrain data: {}\ntest data: {}".format(
+#     threshold,
+#     count_more_than_equal(train_data, "comment_text", threshold),
+#     count_more_than_equal(test_data, "comment_text", threshold)
+# ))
 ```
 
 ### E. Visualization functions
