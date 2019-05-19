@@ -210,7 +210,7 @@ def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
     data = pd.read_csv(
         "../input/jigsaw-unintended-bias-in-toxicity-classification/{}.csv".format(from_name),
         usecols=cols,# use only relevant columns, as specified before in the notebook
-        nrows=1000
+        nrows=2000
     )
     data.set_index("id", inplace=True)
 
@@ -222,6 +222,7 @@ def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
     if drop_duplicates:
         cleaned_words = set()
         data["comment_text"].str.split().apply(cleaned_words.update)
+        print(original_word_count)
 
         # Write summary file of the cleanup process
         pd.DataFrame({
@@ -288,6 +289,7 @@ from visualizations import (
     visualize_target_distribution,
     visualize_comment_length
 )
+
 ```
 
 In this section we will attempt to find further details of the data with some basic exploratory data analysis (EDA) techniques.
@@ -331,7 +333,7 @@ visualize_toxicity_by_identity(train_data, identity_columns)
 ```
 
 ```{python}
-train_data.sort_values(by=["target", "jewish"], ascending=False).head(10)
+train_data.sort_values(by=["target", "jewish"], ascending=False).head(10).to_csv("./head.csv", sep="|")
 ```
 
 Here, we see the comment lengths (number of characters in a sentence) for the train and validation datasets. The distribution is bimodal but heavily skewed to shorter lengths. The two peaks are at approximately 100 and 1000 character marks. There are only a total of four (4) items in the training dataset with more-than or equal to 1250 characters in the datasets. The corresponding number for the test dataset is three (3).
@@ -438,36 +440,52 @@ class LSTMNetwork(nn.Module):
     def __init__(self, max_len, vocab_size, hidden_size, out_size):
         super(LSTMNetwork, self).__init__()
         self.embedding = nn.Embedding(vocab_size, max_len)
-        
+
+        self.pre = nn.Sequential(
+            nn.Linear(max_len, hidden_size * 2),
+            nn.Dropout(.20),
+            nn.ELU(),
+            nn.Linear(hidden_size * 2, max_len)
+        )
+
         self.lstm = nn.LSTM(
             input_size = max_len,
             hidden_size = hidden_size,
             bidirectional = True,
             batch_first = True,
-            num_layers = 2,
-            dropout = .25,
+            num_layers = 4
         )
-        
+
         self.net = nn.Sequential(
             nn.Linear(hidden_size * 4, hidden_size * 2),
             nn.ELU(),
             nn.Linear(hidden_size * 2, out_size)
         )
 
+
+
+
     def forward(self, x):
+        print(x.size()) #torch.Size([148, 917])
         embedding = self.embedding(x)
+        print(embedding.size()) # torch.Size([148, 917, 917])
+        out = self.pre(embedding)
+        print(out.size()) # torch.Size([148, 917, 917])
         out, _ = self.lstm(embedding)
-        
+        print(out.size()) # torch.Size([148, 917, 256])
         out = torch.cat((
             torch.max(out, 1)[0], # global max pooling
             torch.mean(out, 1) # global average pooling
         ), 1)
+        print(out.size()) # torch.Size([148, 512])
 
         return self.net(out)
+
 ```
 
 ```{python}
 max_len = len(sentences.max())
+print(max_len)
 
 lstm = LSTMNetwork(max_len, len(tokenizer.word_index) + 1, 128, len(train_y.columns)).to(device)
 criterion = nn.BCEWithLogitsLoss(reduction='mean')
@@ -476,7 +494,7 @@ scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: .7 ** epo
 ```
 
 ```{python}
-log_nth = 200
+log_nth = 1
 epochs = 4
 
 print("training model...")
@@ -491,7 +509,7 @@ train_labels_tensor = torch.tensor(train_y.values, dtype=torch.float32).to(devic
 
 train_loader = torch.utils.data.DataLoader(
     torch.utils.data.TensorDataset(train_data_tensor, train_labels_tensor),
-    batch_size=1024,    
+    batch_size=148,    
     shuffle=True
 )
 
@@ -592,21 +610,16 @@ class LSTMNetwork(nn.Module):
         )
         
         self.net = nn.Sequential(
-            nn.Linear(hidden_size * 4, hidden_size * 4),
+            nn.Linear(hidden_size * hidden_size * 2, hidden_size * 2),
             nn.ELU(),
-            nn.Linear(hidden_size * 4, hidden_size * 4),
-            nn.ELU(),
-            nn.Linear(hidden_size * 4, out_size)
+            nn.Linear(hidden_size * 2, out_size)
         )
 
     def forward(self, x):
         embedding = self.embedding(x)
         out, _ = self.lstm(self.conv(embedding))
         
-        out = torch.cat((
-            torch.max(out, 1)[0], # global max pooling
-            torch.mean(out, 1) # global average pooling
-        ), 1)
+        out = torch.flatten(out, start_dim=1)
 
         return self.net(out)
 ```
