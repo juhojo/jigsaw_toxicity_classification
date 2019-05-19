@@ -24,7 +24,7 @@
     - [F. Training](#f-training)
     - [G. Obtaining results](#g-obtaining-results)
 
-<div style="page-break-after: always;"></div>
+\pagebreak
 
 ## Abstract
 
@@ -34,7 +34,7 @@ The networks discussed are Convolution Neural Networks (CNN), Long Short-Term Me
 
 In the end we achieved better results than we first anticipated considering the fact that we tried to minimize the number of external utilities. Our best model was achieved using Bi-directional LSTM, the accuracy of this model was `0.91510`.
 
-<div style="page-break-after: always;"></div>
+\pagebreak
 
 ## Introduction
 
@@ -58,6 +58,7 @@ This paper is intented to describe the project for a Kaggle competition ([Jigsaw
   - Calculates the combination of the per-identity Bias AUCs into one overall measure with:
 
 $$M_p(m_s) = \left(\frac{1}{N} \sum_{s=1}^{N} m_s^p\right)^\frac{1}{p}$$
+
 where:
 
 - $M_p$ = the pth power-mean function
@@ -65,7 +66,9 @@ where:
 - $N$ = number of identity subgroups
 
 Lastly, after obtaining the overall AUC and the General Mean of Bias AUCs the calculation of the final model is done with formula:
+
 $$score = w_0 AUC_{overall} + \sum_{a=1}^{A} w_a M_p(m_{s,a})$$
+
 where:
 
 - $A$ = number of submetrics (3)
@@ -76,13 +79,13 @@ None of this is relevant until we have inspected and manipulated the data by dif
 
 Our initial plan is to use CNNs because they have been shown effective for various NLP problems. In addition to CNNs, we will implement a LSTM or a GRU network (another variation of RNN), and compare those results to the results obtained by CNNs.
 
-<div style="page-break-after: always;"></div>
+\pagebreak
 
 ## Analysing the datasets
 
 The data originates from year 2017, when the Civil Comments platform shut down and published their ~2m public comments making them available for researchers. Each item in the dataset has one primary attribute for the toxicity, `target`, indicating a goal value that the models should try to achieve. The trained model should then predict the `target` toxicity for the test data.
 
-The training data originally consisted of `1804874` sentences. We managed to reduce this amount by `30578` rows, which brought the number of total rows to `1774296`. This process is later described in this document. The sentences had altogether n individual words, which we managed to reduce by n words.
+The training data originally consisted of `1804874` sentences. We managed to reduce this amount by `30578` rows, which brought the number of total rows to `1774296`. This process is later described in this document. The sentences had altogether 1670966 individual words, which we managed to reduce by 1354991 (81.09%) words.
 
 In addition to `target`, there are several subtypes of toxicity. These are not supposed to be predicted by the model, but they are for providing additional avenue for future research. The subtype attributes are:
 
@@ -113,74 +116,9 @@ Identities we dropped were: *transgender, other_gender, heterosexual, bisexual, 
 
 ### Cleaning up the data
 
-The data is a little noisy. Example given, there are some reoccurring special characters and the dataset contains duplicate comments with same content. However, the different comments may have been labelled with different targets or subgroups (Kaggle, 2019).
+The were some operations we wanted to do to the dataset before training models on it. For example, there are some reoccurring special characters and the dataset contains duplicate comments with same content. However, the different comments may have been labelled with different targets or subgroups (Kaggle, 2019).
 
-The operations we do for the datasets are; lowercase the words, remove the non-alpha characters, uniform spelling, fill empty values with 0 and preprocess the data so that we obtain a much smaller, more compact, sets for the training and validation.
-
-```python
-def clean_sentence(sentence):
-    return re.sub(
-        "[^a-z\d\s]", # Remove all non-alphanumeric or space characters from comment text
-        " ",
-        " ".join(map(
-            lambda word: replace_spelling[word] if word in replace_spelling else word,
-            sentence.lower().split()
-        )).replace("'", "") # ... and drop all remaining ' -marks (as we do not want to replace them with spaces)
-    )
-
-def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
-    """Create a cleaned file from a file"""
-    data = pd.read_csv(
-        "../input/jigsaw-unintended-bias-in-toxicity-classification/{}.csv".format(from_name),
-        usecols=cols,# use only relevant columns, as specified before in the notebook
-    )
-    data.set_index("id", inplace=True)
-
-    _, original_word_count = get_individual_words(data["comment_text"])
-
-    data["comment_text"] = data["comment_text"].transform(clean_sentence)
-    data = data.fillna(0) # fill empty values with 0
-
-    if drop_duplicates:
-        cleaned_words = set()
-        data["comment_text"].str.split().apply(cleaned_words.update)
-
-        # Write summary file of the cleanup process
-        pd.DataFrame({
-            "previous_word_count": [original_word_count],
-            "cleaned_word_count": [get_individual_words(data["comment_text"])[1]],
-            "previous_row_count": [len(data)],
-            "cleaned_row_count": [data["comment_text"].nunique()]
-        }).to_csv("./"+to_name+"_summary.csv")
-
-        data = data.groupby("comment_text").mean().reset_index()
-    data.to_csv("./"+to_name+".csv", index_label="id")
-
-def print_cleanup_summary(filename):
-    # read cleanup summary from saved file
-    cleanup_summary = pd.read_csv("./"+filename+"_summary.csv")
-    initial_row_count, initial_word_count = cleanup_summary.loc[
-        0,
-        ["previous_row_count", "previous_word_count"]
-    ]
-    cleaned_row_count, cleaned_word_count = cleanup_summary.loc[
-        cleanup_summary.index[-1],
-        ["cleaned_row_count", "cleaned_word_count"]
-    ]
-
-    print("The original data was reducted by {} rows ({:.2f}%) and by {} words ({:.2f}%)".format(
-        initial_row_count - cleaned_row_count,
-        100 * (1 - cleaned_row_count / initial_row_count),
-        initial_word_count - cleaned_word_count,
-        100 * (1 - cleaned_word_count / initial_word_count)
-    ))
-
-def read_cleaned_file(from_name, to_name, cols = None, drop_duplicates = True):
-    if not os.path.isfile("./{}.csv".format(to_name)):
-        create_cleaned_file(from_name, to_name, cols, drop_duplicates)
-    # read data from cleaned data file if not already set
-    return  pd.read_csv("./{}.csv".format(to_name))
-```
+The operations we do for the datasets are; lowercase the words, remove the non-alpha characters, uniform spelling, fill empty values with 0 and preprocess the data so that we obtain a much smaller, more compact, sets for the training and validation. In case of duplicate comments, we merged the instances of each distinct comment, taking average over the labels. The functions describing the cleanup proces can be found in the [utility functions](#d-utility-functions) of the appendix.
 
 ```python
 print("reading train data...")
@@ -200,6 +138,14 @@ test_data = read_cleaned_file(
 )
 print("The test data is read to memory")
 ```
+
+> reading train data...
+
+> The original data was reducted by 30578 rows (1.69%) and by 1354991 words (81.09%)
+
+> reading test data...
+
+> The test data is read to memory
 
 ### Exploratory data analysis (EDA)
 
@@ -230,6 +176,8 @@ print("Amount of toxic comments {:.2f}% and non-toxic comments {:.2f}%.".format(
     count_non_toxic
 ))
 ```
+
+> Amount of toxic comments 0.05% and non-toxic comments 0.95%.
 
 As we can see, most of the sentences are non-toxic. It might then be possible to flag a sentence as toxic by just having a few specific word pairings within each identity group.
 
@@ -277,7 +225,7 @@ visualize_comment_length(test_data, "Comment text lengths for test data")
 
 As we can see from the illustrations above, the two datasets have very similar shape and the model should hence yield good results for both the training and the test dataset.
 
-<div style="page-break-after: always;"></div>
+\pagebreak
 
 ## Methods
 
@@ -303,6 +251,8 @@ np.random.seed(0)
 torch.manual_seed(0)
 ```
 
+The models presented here, are the ones that achieved the highest scores within each architecture in our trials.
+
 ### Preprocess the data
 
 Before feeding the comment contents to the model, we want to perform integer encoding of its contents. We do this by using tokenizer provided by `Keras` -library. The tokenizer transforms text content into sequence of integers. Doing this allows us to later on implement an embedding layer that we need for processing text data. (Keras Documentation, 2018)
@@ -325,22 +275,32 @@ CNNs are feed-forward artificial neural networks. They use a variation of multil
 
 Harrison Jansma recommends in his Medium article not to use Dropout (Harrison, 2018). Dropout is a technique for preventing overfitting in neural networks by randomly dropping units (and their connections) from neural network during training (Srivastana et al., 2014.). According to Jansma, there are two main reasons why use of dropout is declining in CNNs. First, use of dropout is less effective in regularizing convolutional layers in contrast to batch normalization. Secondly, dropout is good for fully connected layers but more recent architectures have moved away from these fully-connected blocks. Hence, it is not the tool for these architectures.
 
+Our network consists of following:
+
+1. Embedding layer
+  * The output will be of size $M*N*N$, where $M$ is batch size and $N$ is the length of the longest sentence.
+1. 3x convolutional layers
+  * The output size of each is calculated by $\left\lfloor\frac{N + 2 \times padding - dilation \times (kernelsize - 1) - 1}{stride} + 1\right\rfloor$, where $N$ is the input size. We did not alter the dilation at all, and used the default value which is 1.
+1. Before feeding the output of convolutional layers to linear layers, we will take average pooling over it
+1. 2x linear layers
+  * ELU activation function in between. We won't apply activation function to the last layer, as it is applied after.
+
 ```python
 class CNNNetwork(nn.Module):
     def __init__(self, max_len, vocab_size, hidden_size, out_size):
-        super(LSTMNetwork, self).__init__()
+        super(CNNNetwork, self).__init__()
         self.embedding = nn.Embedding(vocab_size, max_len)
 
         self.conv = nn.Sequential(
             nn.Conv1d(max_len, hidden_size, 3, padding = 1),
             nn.BatchNorm1d(hidden_size),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Conv1d(hidden_size, hidden_size, 3, padding = 1),
             nn.BatchNorm1d(hidden_size),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Conv1d(hidden_size, hidden_size, 3, padding = 1),
             nn.BatchNorm1d(hidden_size),
-            nn.ReLU(),
+            nn.ELU(),
         )
 
         in_size = get_conv_out_size(max_len, 3, 1, 1)
@@ -392,7 +352,7 @@ class LSTMNetwork(nn.Module):
 
         self.pre = nn.Sequential(
             nn.Linear(max_len, hidden_size * 2),
-            nn.Dropout(.20),
+            nn.Dropout(.20), # dropout to counter over-fitting
             nn.ELU(),
             nn.Linear(hidden_size * 2, max_len)
         )
@@ -412,28 +372,16 @@ class LSTMNetwork(nn.Module):
         )
 
     def forward(self, x):
-        embedding = self.embedding(x)
-        out = self.pre(embedding)
-        out, _ = self.lstm(embedding)
+        embedding = self.embedding(x) # output of size M*N*N where M is batch size and N max_len
+        out = self.pre(embedding) # output size will be same as the input size
+        out, _ = self.lstm(embedding) # M*N*2*H, where M is batch size N max_len, H hidden_size
 
         out = torch.cat((
             torch.max(out, 1)[0], # global max pooling
             torch.mean(out, 1) # global average pooling
-        ), 1)
+        ), 1) # The output size will be M*2N where M is batch size and N is input size (in this case 2*hidden_size -> N = 4*hidden_size)
 
         return self.net(out)
-```
-
-```python
-max_len = len(sentences.max())
-
-lstm = LSTMNetwork(max_len, len(tokenizer.word_index) + 1, 128, len(train_y.columns)).to(device)
-# Criterion combines BCELoss and sigmoid layer, more numerically stable
-# than embedding sigmoid directly into the network
-# as torch takes advantage of the log-sum-exp trick for numerical stability.
-criterion = nn.BCEWithLogitsLoss(reduction="mean")
-optimizer = optim.Adam(lstm.parameters(), lr=0.001)
-scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: .7 ** epoch)
 ```
 
 ### Combination of CNN and LSTM
@@ -443,7 +391,7 @@ A combination network of Convolutional Neural Network and LSTM. An award winning
 ```python
 class CNNLSTMNetwork(nn.Module):
     def __init__(self, max_len, vocab_size, hidden_size, out_size):
-        super(LSTMNetwork, self).__init__()
+        super(CNNLSTMNetwork, self).__init__()
         self.embedding = nn.Embedding(vocab_size, max_len)
 
         self.conv = nn.Sequential(
@@ -481,21 +429,45 @@ class CNNLSTMNetwork(nn.Module):
         return self.net(out)
 ```
 
-<div style="page-break-after: always;"></div>
+### Training the models
+
+```python
+max_len = len(sentences.max())
+
+# Model is one of the networks declared above
+lstm = Model(
+  max_len,
+  len(tokenizer.word_index) + 1, # vocabularity size
+  128, # hidden size
+  len(train_y.columns) # output size
+).to(device)
+# Criterion combines BCELoss and sigmoid layer, more numerically stable
+# than embedding sigmoid directly into the network
+# as torch takes advantage of the log-sum-exp trick for numerical stability.
+criterion = nn.BCEWithLogitsLoss(reduction="mean")
+
+# We only used Adam optimizer with default parameters (https://pytorch.org/docs/stable/_modules/torch/optim/adam.html)
+optimizer = optim.Adam(lstm.parameters(), lr=0.001)
+
+# Scheduler alters the learning rate after each epoch. found optimal reduction of .6**epoch count by observing convergence of the loss
+scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: .6 ** epoch)
+```
+
+\pagebreak
 
 ## Results
 
-Below are the results of the use of the above networks with tweaked parameters and network structures. However, due to limited time reserved to project and computational resources, we were only able to try a handful of alterations.
+Below are the results of the use of the above networks with optimal found parameters and network structures. However, due to limited time reserved to project and computational resources, we were only able to try a handful of alterations.
 
-| activation fn | score   | lr coefficient | dropout | hidden size | lstm_layers |
-| ------------- | ------- | -------------- | ------- | ----------- | ----------- |
-| ELU           | 0.91227 | .7             | .25     | 128         | 2           |
-| ReLU          | 0.89617 | .5             | .25     | 128         | 2           |
-| ReLU          | 0.90599 | .7             | .25     | 128         | 4           |
+| model | activation fn | score   | lr coefficient | dropout | hidden size | lstm_layers |
+| --- | ------------- | ------- | -------------- | ------- | ----------- | ----------- |
+| LSTM | ELU           | 0.91559 | .6             | .25     | 128         | 4           |
+| CNN | ReLU          | 0.89617 | .5             | .25     | 128         | 2           |
+| CNNLSTM | ReLU          | 0.90599 | .7             | .25     | 128         | 4           |
 
 Unlike originally intended, we did not use GRU network at all. This was due to the time limitations set to the project.
 
-<div style="page-break-after: always;"></div>
+\pagebreak
 
 ## Conclusions
 
@@ -507,7 +479,7 @@ We also had some issues with computational resources, as we hit memory caps quit
 
 Originally, we thought of using the `parent_id` attribute, but in the end we decided against it, due to pressure of time. Also, the data contained metadata from Civil Comments: such as `funny`, `sad`, `likes` and `dislikes`. These subtypes were not utilized in any way, but further research could benefit from these greatly.
 
-<div style="page-break-after: always;"></div>
+\pagebreak
 
 ## References
 
@@ -536,13 +508,11 @@ Yih, W., He, X., Meek, C. 2014. Semantic Parsing for Single-Relation Question An
 
 Pennington, J., Socher, R., D. Manning. C. D. 2014. GloVe: Global Vectors for Word Representation.
 
-<div style="page-break-after: always;"></div>
+\pagebreak
 
 ## Appendix
 
-<div style="page-break-after: always;"></div>
-
-## A. Imports
+### A. Imports
 
 ```python
 import numpy as np # linear algebra
@@ -658,6 +628,69 @@ replace_spelling = {
 ### D. Utility functions
 
 ```python
+def clean_sentence(sentence):
+    return re.sub(
+        "[^a-z\d\s]", # Remove all non-alphanumeric or space characters from comment text
+        " ",
+        " ".join(map(
+            lambda word: replace_spelling[word] if word in replace_spelling else word,
+            sentence.lower().split()
+        )).replace("'", "") # ... and drop all remaining ' -marks (as we do not want to replace them with spaces)
+    )
+
+def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
+    """Create a cleaned file from a file"""
+    data = pd.read_csv(
+        "../input/jigsaw-unintended-bias-in-toxicity-classification/{}.csv".format(from_name),
+        usecols=cols,# use only relevant columns, as specified before in the notebook
+    )
+    data.set_index("id", inplace=True)
+
+    _, original_word_count = get_individual_words(data["comment_text"])
+
+    data["comment_text"] = data["comment_text"].transform(clean_sentence)
+    data = data.fillna(0) # fill empty values with 0
+
+    if drop_duplicates:
+        cleaned_words = set()
+        data["comment_text"].str.split().apply(cleaned_words.update)
+
+        # Write summary file of the cleanup process
+        pd.DataFrame({
+            "previous_word_count": [original_word_count],
+            "cleaned_word_count": [get_individual_words(data["comment_text"])[1]],
+            "previous_row_count": [len(data)],
+            "cleaned_row_count": [data["comment_text"].nunique()]
+        }).to_csv("./"+to_name+"_summary.csv")
+
+        data = data.groupby("comment_text").mean().reset_index()
+    data.to_csv("./"+to_name+".csv", index_label="id")
+
+def print_cleanup_summary(filename):
+    # read cleanup summary from saved file
+    cleanup_summary = pd.read_csv("./"+filename+"_summary.csv")
+    initial_row_count, initial_word_count = cleanup_summary.loc[
+        0,
+        ["previous_row_count", "previous_word_count"]
+    ]
+    cleaned_row_count, cleaned_word_count = cleanup_summary.loc[
+        cleanup_summary.index[-1],
+        ["cleaned_row_count", "cleaned_word_count"]
+    ]
+
+    print("The original data was reducted by {} rows ({:.2f}%) and by {} words ({:.2f}%)".format(
+        initial_row_count - cleaned_row_count,
+        100 * (1 - cleaned_row_count / initial_row_count),
+        initial_word_count - cleaned_word_count,
+        100 * (1 - cleaned_word_count / initial_word_count)
+    ))
+
+def read_cleaned_file(from_name, to_name, cols = None, drop_duplicates = True):
+    if not os.path.isfile("./{}.csv".format(to_name)):
+        create_cleaned_file(from_name, to_name, cols, drop_duplicates)
+    # read data from cleaned data file if not already set
+    return  pd.read_csv("./{}.csv".format(to_name))
+
 def get_individual_words(col):
     assert hasattr(col, "str") and hasattr(col.str, "split")
     words = set()
