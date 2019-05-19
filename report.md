@@ -1,3 +1,7 @@
+---
+colorlinks: true
+---
+
 # CS-E4890 – Jigsaw Unintended Bias in Toxicity Classification
 
 - [CS-E4890 – Jigsaw Unintended Bias in Toxicity Classification](#cs-e4890-%E2%80%93-jigsaw-unintended-bias-in-toxicity-classification)
@@ -463,7 +467,7 @@ Below are the results of the use of the above networks with optimal found parame
 | model   | score   | lr coefficient | dropout | hidden size |
 |---------|---------|----------------|---------|-------------|
 | LSTM    | 0.91559 | .6             | .25     | 128         |
-| CNN     | 0.89617 | .5             | no      | 128         |
+| CNN     | 0.89278 | .5             | no      | 128         |
 | CNNLSTM | 0.89288 | .6             | no      | 128         |
 
 Unlike originally intended, we did not use GRU network at all. This was due to the time limitations set to the project.
@@ -642,7 +646,7 @@ def clean_sentence(sentence):
 def create_cleaned_file(from_name, to_name, cols, drop_duplicates):
     """Create a cleaned file from a file"""
     data = pd.read_csv(
-        "../input/jigsaw-unintended-bias-in-toxicity-classification/{}.csv".format(from_name),
+        "../input/{}.csv".format(from_name),
         usecols=cols,# use only relevant columns, as specified before in the notebook
     )
     data.set_index("id", inplace=True)
