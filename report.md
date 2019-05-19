@@ -12,17 +12,18 @@
     - [Convolutional Neural Network (CNN)](#convolutional-neural-network-cnn)
     - [Long short-term memory (LSTM)](#long-short-term-memory-lstm)
     - [Combination of CNN and LSTM](#combination-of-cnn-and-lstm)
+    - [Training the models](#training-the-models)
   - [Results](#results)
   - [Conclusions](#conclusions)
   - [References](#references)
   - [Appendix](#appendix)
-  - [A. Imports](#a-imports)
-    - [B. Columns](#b-columns)
-    - [C. Spelling replacements](#c-spelling-replacements)
-    - [D. Utility functions](#d-utility-functions)
-    - [E. Visualization functions](#e-visualization-functions)
-    - [F. Training](#f-training)
-    - [G. Obtaining results](#g-obtaining-results)
+    - [Imports](#imports)
+    - [Columns](#columns)
+    - [Spelling replacements](#spelling-replacements)
+    - [Utility functions](#utility-functions)
+    - [Visualization functions](#visualization-functions)
+    - [Training](#training)
+    - [Obtaining results](#obtaining-results)
 
 \pagebreak
 
@@ -118,7 +119,7 @@ Identities we dropped were: *transgender, other_gender, heterosexual, bisexual, 
 
 The were some operations we wanted to do to the dataset before training models on it. For example, there are some reoccurring special characters and the dataset contains duplicate comments with same content. However, the different comments may have been labelled with different targets or subgroups (Kaggle, 2019).
 
-The operations we do for the datasets are; lowercase the words, remove the non-alpha characters, uniform spelling, fill empty values with 0 and preprocess the data so that we obtain a much smaller, more compact, sets for the training and validation. In case of duplicate comments, we merged the instances of each distinct comment, taking average over the labels. The functions describing the cleanup proces can be found in the [utility functions](#d-utility-functions) of the appendix.
+The operations we do for the datasets are; lowercase the words, remove the non-alpha characters, uniform spelling, fill empty values with 0 and preprocess the data so that we obtain a much smaller, more compact, sets for the training and validation. In case of duplicate comments, we merged the instances of each distinct comment, taking average over the labels. The functions describing the cleanup proces can be found in the [utility functions](#utility-functions) of the appendix.
 
 ```python
 print("reading train data...")
@@ -457,13 +458,13 @@ scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: .6 ** epo
 
 ## Results
 
-Below are the results of the use of the above networks with optimal found parameters and network structures. However, due to limited time reserved to project and computational resources, we were only able to try a handful of alterations.
+Below are the results of the use of the above networks with optimal found parameters and network structures. However, due to limited time reserved to project and computational resources, we were only able to try a handful of alterations. In convolutional neural networks we used batch normalization to counter overfitting.
 
-| model | activation fn | score   | lr coefficient | dropout | hidden size | lstm_layers |
-| --- | ------------- | ------- | -------------- | ------- | ----------- | ----------- |
-| LSTM | ELU           | 0.91559 | .6             | .25     | 128         | 4           |
-| CNN | ReLU          | 0.89617 | .5             | .25     | 128         | 2           |
-| CNNLSTM | ReLU          | 0.90599 | .7             | .25     | 128         | 4           |
+| model   | score   | lr coefficient | dropout | hidden size |
+|---------|---------|----------------|---------|-------------|
+| LSTM    | 0.91559 | .6             | .25     | 128         |
+| CNN     | 0.89617 | .5             | no      | 128         |
+| CNNLSTM | 0.89288 | .6             | no      | 128         |
 
 Unlike originally intended, we did not use GRU network at all. This was due to the time limitations set to the project.
 
@@ -512,7 +513,7 @@ Pennington, J., Socher, R., D. Manning. C. D. 2014. GloVe: Global Vectors for Wo
 
 ## Appendix
 
-### A. Imports
+### Imports
 
 ```python
 import numpy as np # linear algebra
@@ -535,7 +536,7 @@ device = torch.device("cuda:0")
 torch.backends.cudnn.deterministic = True
 ```
 
-### B. Columns
+### Columns
 
 ```python
 identity_columns = [
@@ -557,7 +558,7 @@ relevant_columns = [
 ] + identity_columns
 ```
 
-### C. Spelling replacements
+### Spelling replacements
 
 ```python
 replace_spelling = {
@@ -625,7 +626,7 @@ replace_spelling = {
 }
 ```
 
-### D. Utility functions
+### Utility functions
 
 ```python
 def clean_sentence(sentence):
@@ -722,7 +723,7 @@ def count_more_than_equal(data, attr, threshold):
 # ))
 ```
 
-### E. Visualization functions
+### Visualization functions
 
 ```python
 import matplotlib.pyplot as plt
@@ -783,7 +784,7 @@ def visualize_comment_length(data, title):
     plt.show()
 ```
 
-### F. Training
+### Training
 
 ```python
 log_nth = 200
@@ -837,7 +838,7 @@ print("saving model...")
 torch.save(lstm.state_dict(), "./lstm.pd")
 ```
 
-### G. Obtaining results
+### Obtaining results
 
 ```python
 lstm.eval() # set lstm to evaluation mode
